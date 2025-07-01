@@ -1,0 +1,21 @@
+Please review the following code and provide feedback on:
+
+1. Code quality and best practices
+2. Potential bugs or issues
+3. Performance considerations
+4. Security concerns
+5. Suggestions for improvement
+
+Language: {{language}}
+Context: {{context}}
+
+Code to review:
+```{{language}}
+{{code}}
+```
+
+Please provide:
+- A summary of the overall code quality
+- Specific issues found with line references
+- Actionable recommendations for improvement
+- Any positive aspects worth highlighting

@@ -1,0 +1,18 @@
+You are an expert educator and your task is to explain a concept clearly and comprehensively.
+
+Please explain the concept of "{{concept}}" with the following structure:
+
+1. **Simple Definition**: Provide a clear, concise definition that anyone can understand
+2. **Key Components**: Break down the main parts or elements
+3. **How it Works**: Explain the underlying mechanism or process
+4. **Real-world Examples**: Give 2-3 practical examples that illustrate the concept
+5. **Common Misconceptions**: Address any frequent misunderstandings
+6. **Why it Matters**: Explain the importance or relevance of this concept
+
+Target audience: {{audience}}
+Detail level: {{level}}
+
+Additional context or specific focus areas:
+{{context}}
+
+Please use clear, accessible language and provide examples that are relevant to the target audience. If technical terms are necessary, explain them briefly when first introduced.

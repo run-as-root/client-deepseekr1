@@ -1,0 +1,27 @@
+You are an expert summarizer. Your task is to create a clear and concise summary of the provided content.
+
+**Content to Summarize**:
+{{content}}
+
+**Summary Type**: {{type}}
+**Target Length**: {{length}}
+**Target Audience**: {{audience}}
+
+Please provide a summary that includes:
+
+1. **Main Points**: The key ideas or arguments presented
+2. **Supporting Details**: Important facts, examples, or evidence
+3. **Conclusions**: Any final thoughts or outcomes mentioned
+4. **Action Items**: Any specific recommendations or next steps (if applicable)
+
+**Summary Requirements**:
+- Keep it concise and focused
+- Use clear, accessible language
+- Maintain the original tone and intent
+- Highlight the most important information
+- Structure it logically for easy reading
+
+**Additional Instructions**:
+{{instructions}}
+
+Please format your summary in a way that's easy to scan and understand for the target audience.
