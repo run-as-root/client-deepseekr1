@@ -78,6 +78,18 @@ node src/cli.js test
 node src/cli.js ask "Explain quantum computing" --stream
 ```
 
+#### Magento 2 Ticket Analysis
+```bash
+# Interactive Magento 2 ticket analysis
+node src/cli.js magento2
+
+# Quick analysis mode
+node src/cli.js magento2 --quick
+
+# Read ticket from file
+node src/cli.js magento2 --file ticket.txt
+```
+
 ### Programmatic Usage
 
 ```javascript
@@ -105,6 +117,19 @@ async function example() {
       context: 'machine learning project'
     });
     console.log(templateResponse.response);
+
+    // Magento 2 ticket analysis
+    const magentoAnalysis = await client.generateFromTemplate('magento2-ticket-analysis', {
+      ticket_content: 'Fix checkout bug when using coupon codes',
+      ticket_type: 'Bug Fix',
+      magento_version: '2.4.6',
+      project_context: 'E-commerce store',
+      store_config: 'Multi-store setup',
+      existing_customizations: 'Custom checkout flow',
+      third_party_extensions: 'Payment gateway extensions',
+      performance_requirements: 'Standard performance'
+    });
+    console.log(magentoAnalysis.response);
 
     // Streaming response
     await client.generateStream('Tell me a story', (chunk) => {
@@ -138,6 +163,12 @@ Templates are stored in the `prompts/` directory as `.txt` files. They support v
 
 4. **summarize.txt** - Content summarization
    - Variables: `content`, `type`, `length`, `audience`, `instructions`
+
+5. **magento2-ticket-analysis.txt** - Comprehensive Magento 2 ticket analysis
+   - Variables: `ticket_content`, `ticket_type`, `project_context`, `magento_version`, `store_config`, `existing_customizations`, `third_party_extensions`, `performance_requirements`
+
+6. **magento2-quick-clarify.txt** - Quick Magento 2 ticket clarification
+   - Variables: `ticket_content`, `magento_version`, `project_type`
 
 ### Creating Custom Templates
 
@@ -241,6 +272,7 @@ Test connection to the server.
 | `template <name>` | `t` | Use a template | `node src/cli.js template code-review` |
 | `list` | `l` | List templates | `node src/cli.js list` |
 | `test` | - | Test connection | `node src/cli.js test` |
+| `magento2` | `m2` | Analyze Magento 2 tickets | `node src/cli.js magento2` |
 
 ### CLI Options
 
@@ -329,6 +361,38 @@ function LoginForm({ onSubmit }) {
   );
 }
   `
+});
+```
+
+### Magento 2 Ticket Analysis
+```javascript
+// Analyze a feature request ticket
+const featureAnalysis = await client.generateFromTemplate('magento2-ticket-analysis', {
+  ticket_content: `
+    Title: Add product comparison feature
+    
+    As a customer, I want to compare products side by side
+    so I can make better purchasing decisions.
+    
+    Requirements:
+    - Compare up to 4 products
+    - Show key attributes in table format
+    - Add compare button on category pages
+  `,
+  ticket_type: 'Feature Request',
+  project_context: 'Fashion e-commerce store',
+  magento_version: '2.4.6',
+  store_config: 'Multi-store setup with 3 store views',
+  existing_customizations: 'Custom product page layout',
+  third_party_extensions: 'Amasty SEO suite',
+  performance_requirements: 'Page load under 3 seconds'
+});
+
+// Quick ticket clarification
+const quickAnalysis = await client.generateFromTemplate('magento2-quick-clarify', {
+  ticket_content: 'Shopping cart is broken',
+  magento_version: '2.4.5',
+  project_type: 'B2B e-commerce'
 });
 ```
 
