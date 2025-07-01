@@ -1,54 +1,77 @@
-const axios = require('axios');
-const fs = require('fs').promises;
-const path = require('path');
+const axios = require("axios");
+const fs = require("fs").promises;
+const path = require("path");
 
 class DeepSeekClient {
   constructor(config = {}) {
-    this.baseUrl = config.baseUrl || process.env.DEEPSEEK_BASE_URL;
-    this.token = config.token || process.env.DEEPSEEK_TOKEN;
-    this.model = config.model || 'deepseek-r1:8b';
-    this.timeout = config.timeout || process.env.DEEPSEEK_TIMEOUT;
+    this.baseUrl =
+      config.baseUrl ||
+      process.env.DEEPSEEK_BASE_URL ||
+      process.env.OPENAI_BASE_URL;
+    this.token =
+      config.token || process.env.DEEPSEEK_TOKEN || process.env.OPENAI_API_KEY;
+    this.model = config.model || process.env.DEEPSEEK_MODEL || "deepseek-r1:8b";
+    this.timeout = config.timeout || process.env.DEEPSEEK_TIMEOUT || 30000;
+
+    // Determine API format - default to DeepSeek for backward compatibility
+    this.apiFormat = config.apiFormat || process.env.API_FORMAT || "deepseek";
+
+    // Auto-detect API format based on base URL if not explicitly set
+    if (!config.apiFormat && !process.env.API_FORMAT) {
+      if (
+        this.baseUrl &&
+        (this.baseUrl.includes("openai.com") ||
+          this.baseUrl.includes("api.openai"))
+      ) {
+        this.apiFormat = "openai";
+      }
+    }
 
     if (!this.baseUrl) {
-      throw new Error('Base URL is required. Set DEEPSEEK_BASE_URL environment variable or pass baseUrl in config.');
+      throw new Error(
+        "Base URL is required. Set DEEPSEEK_BASE_URL/OPENAI_BASE_URL environment variable or pass baseUrl in config.",
+      );
     }
 
     if (!this.token) {
-      throw new Error('Authorization token is required. Set DEEPSEEK_TOKEN environment variable or pass token in config.');
+      throw new Error(
+        "Authorization token is required. Set DEEPSEEK_TOKEN/OPENAI_API_KEY environment variable or pass token in config.",
+      );
     }
 
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: this.timeout,
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
-      }
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.token}`,
+      },
     });
   }
 
   /**
-   * Generate a response from the DeepSeek model
+   * Generate a response from the model (supports both OpenAI and DeepSeek formats)
    * @param {string} prompt - The prompt to send to the model
    * @param {object} options - Additional options
    * @returns {Promise<object>} - The response from the model
    */
   async generate(prompt, options = {}) {
     try {
-      const requestData = {
-        model: options.model || this.model,
-        prompt: prompt,
-        stream: options.stream || false,
-        ...options
-      };
+      const requestData = this._formatRequest(prompt, options);
+      const endpoint = this._getEndpoint(options.stream);
 
-      const response = await this.client.post('/api/generate', requestData);
-      return response.data;
+      const response = await this.client.post(endpoint, requestData);
+      return this._formatResponse(response.data);
     } catch (error) {
       if (error.response) {
-        throw new Error(`API Error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`);
+        const errorMessage = this._extractErrorMessage(error.response);
+        throw new Error(
+          `API Error: ${error.response.status} - ${errorMessage}`,
+        );
       } else if (error.request) {
-        throw new Error('Network Error: Unable to reach the server. Please check your connection and server URL.');
+        throw new Error(
+          "Network Error: Unable to reach the server. Please check your connection and server URL.",
+        );
       } else {
         throw new Error(`Request Error: ${error.message}`);
       }
@@ -56,7 +79,7 @@ class DeepSeekClient {
   }
 
   /**
-   * Generate a streaming response from the DeepSeek model
+   * Generate a streaming response from the model (supports both OpenAI and DeepSeek formats)
    * @param {string} prompt - The prompt to send to the model
    * @param {function} onChunk - Callback function for each chunk
    * @param {object} options - Additional options
@@ -64,33 +87,38 @@ class DeepSeekClient {
    */
   async generateStream(prompt, onChunk, options = {}) {
     try {
-      const requestData = {
-        model: options.model || this.model,
-        prompt: prompt,
+      const requestData = this._formatRequest(prompt, {
+        ...options,
         stream: true,
-        ...options
-      };
+      });
+      const endpoint = this._getEndpoint(true);
 
-      const response = await this.client.post('/api/generate', requestData, {
-        responseType: 'stream'
+      const response = await this.client.post(endpoint, requestData, {
+        responseType: "stream",
       });
 
       return new Promise((resolve, reject) => {
-        let buffer = '';
+        let buffer = "";
 
-        response.data.on('data', (chunk) => {
+        response.data.on("data", (chunk) => {
           buffer += chunk.toString();
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.trim()) {
               try {
-                const data = JSON.parse(line);
-                onChunk(data);
-                if (data.done) {
-                  resolve();
-                  return;
+                const parsedChunk = this._parseStreamChunk(line);
+                if (parsedChunk) {
+                  onChunk(parsedChunk);
+                  if (
+                    parsedChunk.done ||
+                    (this.apiFormat === "openai" &&
+                      parsedChunk.choices?.[0]?.finish_reason)
+                  ) {
+                    resolve();
+                    return;
+                  }
                 }
               } catch (parseError) {
                 // Skip invalid JSON lines
@@ -99,19 +127,24 @@ class DeepSeekClient {
           }
         });
 
-        response.data.on('end', () => {
+        response.data.on("end", () => {
           resolve();
         });
 
-        response.data.on('error', (error) => {
+        response.data.on("error", (error) => {
           reject(new Error(`Stream Error: ${error.message}`));
         });
       });
     } catch (error) {
       if (error.response) {
-        throw new Error(`API Error: ${error.response.status} - ${error.response.data?.error || error.response.statusText}`);
+        const errorMessage = this._extractErrorMessage(error.response);
+        throw new Error(
+          `API Error: ${error.response.status} - ${errorMessage}`,
+        );
       } else if (error.request) {
-        throw new Error('Network Error: Unable to reach the server. Please check your connection and server URL.');
+        throw new Error(
+          "Network Error: Unable to reach the server. Please check your connection and server URL.",
+        );
       } else {
         throw new Error(`Request Error: ${error.message}`);
       }
@@ -124,13 +157,19 @@ class DeepSeekClient {
    * @returns {Promise<string>} - The template content
    */
   async loadPromptTemplate(templateName) {
-    const promptPath = path.join(process.cwd(), 'prompts', `${templateName}.txt`);
+    const promptPath = path.join(
+      process.cwd(),
+      "prompts",
+      `${templateName}.txt`,
+    );
     try {
-      const content = await fs.readFile(promptPath, 'utf8');
+      const content = await fs.readFile(promptPath, "utf8");
       return content.trim();
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        throw new Error(`Prompt template '${templateName}' not found. Create a file at prompts/${templateName}.txt`);
+      if (error.code === "ENOENT") {
+        throw new Error(
+          `Prompt template '${templateName}' not found. Create a file at prompts/${templateName}.txt`,
+        );
       }
       throw new Error(`Error loading prompt template: ${error.message}`);
     }
@@ -141,14 +180,14 @@ class DeepSeekClient {
    * @returns {Promise<string[]>} - Array of template names
    */
   async listPromptTemplates() {
-    const promptsDir = path.join(process.cwd(), 'prompts');
+    const promptsDir = path.join(process.cwd(), "prompts");
     try {
       const files = await fs.readdir(promptsDir);
       return files
-        .filter(file => file.endsWith('.txt'))
-        .map(file => file.replace('.txt', ''));
+        .filter((file) => file.endsWith(".txt"))
+        .map((file) => file.replace(".txt", ""));
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (error.code === "ENOENT") {
         return [];
       }
       throw new Error(`Error listing prompt templates: ${error.message}`);
@@ -162,7 +201,7 @@ class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async savePromptTemplate(templateName, content) {
-    const promptsDir = path.join(process.cwd(), 'prompts');
+    const promptsDir = path.join(process.cwd(), "prompts");
     const promptPath = path.join(promptsDir, `${templateName}.txt`);
 
     try {
@@ -199,12 +238,12 @@ class DeepSeekClient {
   }
 
   /**
-   * Test connection to the DeepSeek server
+   * Test connection to the server
    * @returns {Promise<boolean>} - True if connection is successful
    */
   async testConnection() {
     try {
-      await this.generate('Test connection', { model: this.model });
+      await this.generate("Test connection", { model: this.model });
       return true;
     } catch (error) {
       return false;
@@ -217,16 +256,152 @@ class DeepSeekClient {
    */
   async getServerInfo() {
     try {
-      const response = await this.client.get('/api/info');
+      const infoEndpoint =
+        this.apiFormat === "openai" ? "/v1/models" : "/api/info";
+      const response = await this.client.get(infoEndpoint);
       return response.data;
     } catch (error) {
       // If info endpoint doesn't exist, return basic info
       return {
-        status: 'connected',
+        status: "connected",
         model: this.model,
-        baseUrl: this.baseUrl
+        baseUrl: this.baseUrl,
+        apiFormat: this.apiFormat,
       };
     }
+  }
+
+  /**
+   * Format request based on API format
+   * @private
+   */
+  _formatRequest(prompt, options = {}) {
+    const model = options.model || this.model;
+    const stream = options.stream || false;
+
+    if (this.apiFormat === "openai") {
+      const requestData = {
+        model: model,
+        messages: [{ role: "user", content: prompt }],
+        stream: stream,
+      };
+
+      // Add optional OpenAI parameters
+      if (options.temperature !== undefined)
+        requestData.temperature = options.temperature;
+      if (options.max_tokens !== undefined)
+        requestData.max_tokens = options.max_tokens;
+      if (options.top_p !== undefined) requestData.top_p = options.top_p;
+      if (options.frequency_penalty !== undefined)
+        requestData.frequency_penalty = options.frequency_penalty;
+      if (options.presence_penalty !== undefined)
+        requestData.presence_penalty = options.presence_penalty;
+
+      return requestData;
+    } else {
+      // DeepSeek format (default)
+      return {
+        model: model,
+        prompt: prompt,
+        stream: stream,
+        ...options,
+      };
+    }
+  }
+
+  /**
+   * Get appropriate endpoint based on API format
+   * @private
+   */
+  _getEndpoint(isStream = false) {
+    if (this.apiFormat === "openai") {
+      return "/v1/chat/completions";
+    } else {
+      return "/api/generate";
+    }
+  }
+
+  /**
+   * Format response based on API format
+   * @private
+   */
+  _formatResponse(data) {
+    if (this.apiFormat === "openai") {
+      // Convert OpenAI format to unified format
+      return {
+        response: data.choices?.[0]?.message?.content || "",
+        model: data.model,
+        created: data.created,
+        usage: data.usage,
+        id: data.id,
+        // Keep original data for compatibility
+        _original: data,
+      };
+    } else {
+      // DeepSeek format - return as is
+      return data;
+    }
+  }
+
+  /**
+   * Parse streaming chunk based on API format
+   * @private
+   */
+  _parseStreamChunk(line) {
+    if (this.apiFormat === "openai") {
+      // OpenAI streaming format
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        if (data === "[DONE]") {
+          return { done: true };
+        }
+        try {
+          const parsed = JSON.parse(data);
+          return {
+            response: parsed.choices?.[0]?.delta?.content || "",
+            done: parsed.choices?.[0]?.finish_reason !== null,
+            _original: parsed,
+          };
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    } else {
+      // DeepSeek format
+      return JSON.parse(line);
+    }
+  }
+
+  /**
+   * Extract error message from response based on API format
+   * @private
+   */
+  _extractErrorMessage(response) {
+    if (this.apiFormat === "openai") {
+      return response.data?.error?.message || response.statusText;
+    } else {
+      return response.data?.error || response.statusText;
+    }
+  }
+
+  /**
+   * Set API format
+   * @param {string} format - 'openai' or 'deepseek'
+   */
+  setApiFormat(format) {
+    if (!["openai", "deepseek"].includes(format)) {
+      throw new Error('API format must be either "openai" or "deepseek"');
+    }
+    this.apiFormat = format;
+  }
+
+  /**
+   * Get current API format
+   * @returns {string} - Current API format
+   */
+  getApiFormat() {
+    return this.apiFormat;
   }
 }
 

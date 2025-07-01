@@ -1,6 +1,6 @@
-# DeepSeek Client
+# AI Client - OpenAI & DeepSeek Compatible
 
-A friendly and feature-rich client for communicating with DeepSeek models hosted on your private server. This client provides both CLI and programmatic interfaces with support for reusable prompt templates.
+A friendly and feature-rich client for communicating with AI models. Supports both OpenAI and DeepSeek API formats with full backward compatibility. This client provides both CLI and programmatic interfaces with support for reusable prompt templates.
 
 ## Features
 
@@ -26,10 +26,21 @@ A friendly and feature-rich client for communicating with DeepSeek models hosted
    ```
 
 4. Edit `.env` with your actual values:
+
+   **For DeepSeek (original format):**
    ```env
+   API_FORMAT=deepseek
    DEEPSEEK_BASE_URL=http://your-droplet-ip
    DEEPSEEK_TOKEN=your-token-here
    DEEPSEEK_MODEL=deepseek-r1:8b
+   ```
+
+   **For OpenAI:**
+   ```env
+   API_FORMAT=openai
+   OPENAI_BASE_URL=https://api.openai.com
+   OPENAI_API_KEY=your-openai-key-here
+   OPENAI_MODEL=gpt-4
    ```
 
 ## Quick Start
@@ -78,6 +89,21 @@ node src/cli.js test
 node src/cli.js ask "Explain quantum computing" --stream
 ```
 
+#### Configuration Management
+```bash
+# Show current configuration
+node src/cli.js config --show
+
+# Switch to OpenAI format
+node src/cli.js config --format openai
+
+# Switch to DeepSeek format
+node src/cli.js config --format deepseek
+
+# Interactive configuration setup
+node src/cli.js config
+```
+
 #### Magento 2 Ticket Analysis
 ```bash
 # Interactive Magento 2 ticket analysis
@@ -95,11 +121,22 @@ node src/cli.js magento2 --file ticket.txt
 ```javascript
 const DeepSeekClient = require('./src/index.js');
 
-// Initialize client
-const client = new DeepSeekClient({
+// Initialize client (auto-detects API format from environment)
+const client = new DeepSeekClient();
+
+// Or specify API format explicitly
+const deepseekClient = new DeepSeekClient({
+  apiFormat: 'deepseek',
   baseUrl: 'http://your-droplet-ip',
   token: 'your-token-here',
   model: 'deepseek-r1:8b'
+});
+
+const openaiClient = new DeepSeekClient({
+  apiFormat: 'openai',
+  baseUrl: 'https://api.openai.com',
+  token: 'your-openai-key',
+  model: 'gpt-4'
 });
 
 // Simple generation
@@ -212,15 +249,17 @@ new DeepSeekClient(config)
 #### Methods
 
 ##### `generate(prompt, options)`
-Generate a response from the model.
+Generate a response from the model (works with both API formats).
 
 **Parameters:**
 - `prompt` (string) - The prompt to send
 - `options` (object, optional)
   - `model` - Override default model
   - `stream` - Enable streaming (boolean)
+  - `temperature` - Control randomness (OpenAI format)
+  - `max_tokens` - Maximum tokens (OpenAI format)
 
-**Returns:** Promise<object> - The model response
+**Returns:** Promise<object> - The model response (normalized format)
 
 ##### `generateStream(prompt, onChunk, options)`
 Generate a streaming response.
@@ -263,6 +302,17 @@ Test connection to the server.
 
 **Returns:** Promise<boolean> - Connection status
 
+##### `setApiFormat(format)`
+Change API format dynamically.
+
+**Parameters:**
+- `format` (string) - 'openai' or 'deepseek'
+
+##### `getApiFormat()`
+Get current API format.
+
+**Returns:** string - Current API format ('openai' or 'deepseek')
+
 ## CLI Commands
 
 | Command | Alias | Description | Example |
@@ -272,6 +322,7 @@ Test connection to the server.
 | `template <name>` | `t` | Use a template | `node src/cli.js template code-review` |
 | `list` | `l` | List templates | `node src/cli.js list` |
 | `test` | - | Test connection | `node src/cli.js test` |
+| `config` | `c` | Manage API configuration | `node src/cli.js config` |
 | `magento2` | `m2` | Analyze Magento 2 tickets | `node src/cli.js magento2` |
 
 ### CLI Options
@@ -279,28 +330,71 @@ Test connection to the server.
 - `--model <model>` - Specify model to use
 - `--stream` - Enable streaming response
 - `--vars <json>` - Template variables in JSON format
+- `--show` - Show current configuration (config command)
+- `--format <format>` - Switch API format (config command)
+- `--quick` - Quick analysis mode (magento2 command)
 
 ## Configuration
 
-You can configure the client using:
+### API Format Support
+
+The client supports both OpenAI and DeepSeek API formats:
+
+**DeepSeek Format (Original/Default):**
+- Endpoint: `/api/generate`
+- Request: `{"model": "...", "prompt": "...", "stream": false}`
+- Backward compatible with existing setups
+
+**OpenAI Format:**
+- Endpoint: `/v1/chat/completions`
+- Request: `{"model": "...", "messages": [...], "stream": false}`
+- Compatible with OpenAI API and other OpenAI-compatible services
+
+### Configuration Options
 
 1. **Environment variables** (recommended):
+
+   **For DeepSeek:**
    ```env
+   API_FORMAT=deepseek
    DEEPSEEK_BASE_URL=http://your-droplet-ip
    DEEPSEEK_TOKEN=your-token-here
    DEEPSEEK_MODEL=deepseek-r1:8b
    DEEPSEEK_TIMEOUT=30000
    ```
 
+   **For OpenAI:**
+   ```env
+   API_FORMAT=openai
+   OPENAI_BASE_URL=https://api.openai.com
+   OPENAI_API_KEY=your-openai-key-here
+   OPENAI_MODEL=gpt-4
+   DEEPSEEK_TIMEOUT=30000
+   ```
+
 2. **Configuration object**:
    ```javascript
+   // DeepSeek
    const client = new DeepSeekClient({
+     apiFormat: 'deepseek',
      baseUrl: 'http://your-droplet-ip',
      token: 'your-token-here',
-     model: 'deepseek-r1:8b',
-     timeout: 30000
+     model: 'deepseek-r1:8b'
+   });
+
+   // OpenAI
+   const client = new DeepSeekClient({
+     apiFormat: 'openai',
+     baseUrl: 'https://api.openai.com',
+     token: 'your-openai-key',
+     model: 'gpt-4'
    });
    ```
+
+3. **Auto-detection**: If `API_FORMAT` is not set, the client auto-detects based on:
+   - Available environment variables
+   - Base URL patterns (detects `openai.com`)
+   - Defaults to DeepSeek format for backward compatibility
 
 ## Error Handling
 
@@ -332,9 +426,35 @@ try {
 ```javascript
 const client = new DeepSeekClient();
 
-// Simple question
+// Simple question (works with both APIs)
 const response = await client.generate('What is the capital of France?');
 console.log(response.response);
+
+// Check current API format
+console.log('Using API format:', client.getApiFormat());
+```
+
+### API Format Examples
+```javascript
+// Using DeepSeek format
+const deepseekClient = new DeepSeekClient({
+  apiFormat: 'deepseek',
+  baseUrl: 'http://your-droplet-ip',
+  token: 'your-token',
+  model: 'deepseek-r1:8b'
+});
+
+// Using OpenAI format
+const openaiClient = new DeepSeekClient({
+  apiFormat: 'openai',
+  baseUrl: 'https://api.openai.com',
+  token: 'your-openai-key',
+  model: 'gpt-4'
+});
+
+// Both work the same way
+const response1 = await deepseekClient.generate('Hello');
+const response2 = await openaiClient.generate('Hello');
 ```
 
 ### Code Review
@@ -412,12 +532,19 @@ console.log('\n');
 ### Common Issues
 
 1. **"Base URL is required" error**
-   - Make sure `DEEPSEEK_BASE_URL` is set in your `.env` file
-   - Check that the URL format is correct: `http://your-droplet-ip`
+   - For DeepSeek: Set `DEEPSEEK_BASE_URL` in your `.env` file
+   - For OpenAI: Set `OPENAI_BASE_URL` in your `.env` file
+   - Check URL format is correct (include `http://` or `https://`)
 
 2. **"Authorization token is required" error**
-   - Set `DEEPSEEK_TOKEN` in your `.env` file
-   - Verify your token is correct
+   - For DeepSeek: Set `DEEPSEEK_TOKEN` in your `.env` file
+   - For OpenAI: Set `OPENAI_API_KEY` in your `.env` file
+   - Verify your token/key is correct
+
+3. **API format confusion**
+   - Run `node src/cli.js config --show` to check current format
+   - Use `node src/cli.js config --format openai` to switch formats
+   - Check that model names match the API format
 
 3. **Connection timeout**
    - Check if your server is running
@@ -428,6 +555,21 @@ console.log('\n');
    - Make sure the template file exists in `prompts/` directory
    - Check the file has `.txt` extension
    - Verify file permissions
+
+### Configuration Management
+
+Use the config command for easy setup:
+```bash
+# Show current configuration and validation
+node src/cli.js config --show
+
+# Interactive configuration setup
+node src/cli.js config
+
+# Switch between API formats
+node src/cli.js config --format openai
+node src/cli.js config --format deepseek
+```
 
 ### Debug Mode
 
@@ -457,6 +599,34 @@ If you encounter issues:
 3. Test the connection with `node src/cli.js test`
 4. Check server logs for additional information
 
+## Migration from DeepSeek-only
+
+If you're upgrading from a DeepSeek-only version:
+
+1. **No breaking changes**: Your existing setup continues to work
+2. **Add API format**: Add `API_FORMAT=deepseek` to your `.env` for explicit configuration
+3. **Optional**: Try OpenAI compatibility by switching format
+
+```bash
+# Keep current setup working
+echo "API_FORMAT=deepseek" >> .env
+
+# Or try OpenAI format
+node src/cli.js config --format openai
+```
+
+## API Compatibility
+
+This client abstracts the differences between API formats:
+
+| Feature | DeepSeek Format | OpenAI Format | Client Support |
+|---------|----------------|---------------|----------------|
+| Basic generation | ✅ | ✅ | ✅ Unified interface |
+| Streaming | ✅ | ✅ | ✅ Same callback format |
+| Templates | ✅ | ✅ | ✅ Works with both |
+| Error handling | ✅ | ✅ | ✅ Normalized errors |
+| Model parameters | ✅ | ✅ | ✅ Format-specific options |
+
 ---
 
-Made with ❤️ for the DeepSeek community
+Made with ❤️ for the AI development community

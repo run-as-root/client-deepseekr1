@@ -5,6 +5,7 @@ const inquirer = require("inquirer");
 const chalk = require("chalk");
 const ora = require("ora");
 const DeepSeekClient = require("./DeepSeekClient");
+const ConfigHelper = require("./ConfigHelper");
 require("dotenv").config();
 
 // Initialize the client
@@ -13,13 +14,18 @@ let client;
 try {
   client = new DeepSeekClient();
 } catch (error) {
-  console.error(chalk.red("❌ Error initializing DeepSeek client:"));
+  console.error(chalk.red("❌ Error initializing AI client:"));
   console.error(chalk.red(error.message));
   console.log(
     chalk.yellow("\n💡 Make sure to set your environment variables:"),
   );
+  console.log(chalk.cyan("\n📋 For DeepSeek (default):"));
   console.log(chalk.cyan("   DEEPSEEK_BASE_URL=http://your-droplet-ip"));
   console.log(chalk.cyan("   DEEPSEEK_TOKEN=your-token-here"));
+  console.log(chalk.cyan("\n📋 For OpenAI:"));
+  console.log(chalk.cyan("   API_FORMAT=openai"));
+  console.log(chalk.cyan("   OPENAI_BASE_URL=https://api.openai.com"));
+  console.log(chalk.cyan("   OPENAI_API_KEY=your-openai-key"));
   console.log(chalk.yellow("\nOr create a .env file with these values."));
   process.exit(1);
 }
@@ -59,7 +65,11 @@ program
   .alias("i")
   .description("Start interactive mode")
   .action(async () => {
-    console.log(chalk.blue("🤖 Welcome to DeepSeek Interactive Mode!"));
+    console.log(
+      chalk.blue(
+        `🤖 Welcome to AI Interactive Mode! (${client.getApiFormat().toUpperCase()})`,
+      ),
+    );
     console.log(
       chalk.gray(
         'Type "exit" to quit, "templates" to see available templates\n',
@@ -239,6 +249,9 @@ program
               console.log(
                 chalk.gray(`🤖 Model: ${info.model || client.model}`),
               );
+              console.log(
+                chalk.gray(`🔧 API Format: ${client.getApiFormat()}`),
+              );
             } else {
               console.log(chalk.red("❌ Connection failed!"));
             }
@@ -356,7 +369,7 @@ program
 // Command: Test connection
 program
   .command("test")
-  .description("Test connection to DeepSeek server")
+  .description("Test connection to AI server (OpenAI/DeepSeek)")
   .action(async () => {
     const spinner = ora("Testing connection...").start();
     try {
@@ -368,6 +381,7 @@ program
         const info = await client.getServerInfo();
         console.log(chalk.gray(`📡 Server: ${info.baseUrl || client.baseUrl}`));
         console.log(chalk.gray(`🤖 Model: ${info.model || client.model}`));
+        console.log(chalk.gray(`🔧 API Format: ${client.getApiFormat()}`));
       } else {
         console.log(chalk.red("❌ Connection failed!"));
       }
@@ -497,9 +511,117 @@ program
     }
   });
 
+// Command: Configuration management
+program
+  .command("config")
+  .alias("c")
+  .description("Manage API configuration (OpenAI/DeepSeek)")
+  .option("-s, --show", "Show current configuration")
+  .option("-f, --format <format>", "Switch API format (openai/deepseek)")
+  .action(async (options) => {
+    const configHelper = new ConfigHelper();
+
+    try {
+      if (options.show) {
+        console.log(chalk.blue("🔧 Current Configuration:"));
+        console.log(chalk.white("─".repeat(40)));
+
+        const config = configHelper.getCurrentConfig();
+        console.log(chalk.cyan(`API Format: ${config.apiFormat}`));
+        console.log(chalk.cyan(`Base URL: ${config.baseUrl || "Not set"}`));
+        console.log(chalk.cyan(`Model: ${config.model}`));
+        console.log(chalk.cyan(`Timeout: ${config.timeout}ms`));
+
+        const validation = configHelper.validateConfig();
+        if (validation.valid) {
+          console.log(chalk.green("\n✅ Configuration is valid"));
+        } else {
+          console.log(chalk.red("\n❌ Configuration issues:"));
+          validation.errors.forEach((error) => {
+            console.log(chalk.red(`  • ${error}`));
+          });
+        }
+
+        if (validation.warnings.length > 0) {
+          console.log(chalk.yellow("\n⚠️  Warnings:"));
+          validation.warnings.forEach((warning) => {
+            console.log(chalk.yellow(`  • ${warning}`));
+          });
+        }
+        return;
+      }
+
+      if (options.format) {
+        const format = options.format.toLowerCase();
+        if (!["openai", "deepseek"].includes(format)) {
+          console.log(
+            chalk.red("❌ Format must be either 'openai' or 'deepseek'"),
+          );
+          return;
+        }
+
+        console.log(
+          chalk.blue(`🔄 Switching to ${format.toUpperCase()} format...`),
+        );
+
+        const { confirmed } = await inquirer.prompt([
+          {
+            type: "confirm",
+            name: "confirmed",
+            message: `Are you sure you want to switch to ${format.toUpperCase()} format? This will modify your .env file.`,
+            default: false,
+          },
+        ]);
+
+        if (!confirmed) {
+          console.log(chalk.yellow("Operation cancelled."));
+          return;
+        }
+
+        await configHelper.switchApiFormat(format);
+        console.log(
+          chalk.green(`✅ Switched to ${format.toUpperCase()} format!`),
+        );
+        console.log(
+          chalk.yellow(
+            "Please update your .env file with the appropriate values.",
+          ),
+        );
+        return;
+      }
+
+      // Interactive configuration
+      console.log(chalk.blue("🛠️  Interactive Configuration Setup"));
+      console.log(chalk.white("═".repeat(50)));
+
+      const result = await configHelper.createConfigInteractive(
+        inquirer.prompt.bind(inquirer),
+      );
+
+      if (result.validation.valid) {
+        console.log(chalk.green("\n✅ Configuration created successfully!"));
+        console.log(
+          chalk.gray(`Using ${result.format.toUpperCase()} API format`),
+        );
+      } else {
+        console.log(
+          chalk.yellow("\n⚠️  Configuration created but needs attention:"),
+        );
+        result.validation.errors.forEach((error) => {
+          console.log(chalk.red(`  • ${error}`));
+        });
+      }
+
+      console.log(chalk.blue("\n🧪 Test your configuration:"));
+      console.log(chalk.cyan("   node src/cli.js test"));
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
 // Default command
 program
-  .description("DeepSeek Client - A friendly interface for your DeepSeek model")
+  .description("AI Client - Compatible with OpenAI and DeepSeek APIs")
   .version("1.0.0");
 
 // If no command is provided, start interactive mode

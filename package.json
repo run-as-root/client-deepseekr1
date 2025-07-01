@@ -1,7 +1,7 @@
 {
-  "name": "deepseek-client",
-  "version": "1.0.0",
-  "description": "A friendly client for communicating with DeepSeek model hosted on private server",
+  "name": "ai-client-openai-deepseek",
+  "version": "2.0.0",
+  "description": "A friendly client for AI models - supports both OpenAI and DeepSeek API formats with full backward compatibility",
   "main": "src/index.js",
   "bin": {
     "deepseek": "./src/cli.js"
@@ -10,13 +10,21 @@
     "start": "node src/cli.js",
     "setup": "node setup.js",
     "example": "node examples/basic-usage.js",
+    "example:api-formats": "node examples/api-formats-example.js",
+    "example:magento2": "node examples/magento2-ticket-example.js",
+    "config": "node src/cli.js config",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
+    "openai",
     "deepseek",
     "ai",
     "client",
-    "llm"
+    "llm",
+    "gpt",
+    "chat",
+    "compatible",
+    "api"
   ],
   "author": "Your Name",
   "license": "MIT",
