@@ -7,7 +7,7 @@ class DeepSeekClient {
     this.baseUrl = config.baseUrl || process.env.DEEPSEEK_BASE_URL;
     this.token = config.token || process.env.DEEPSEEK_TOKEN;
     this.model = config.model || 'deepseek-r1:8b';
-    this.timeout = config.timeout || 30000;
+    this.timeout = config.timeout || process.env.DEEPSEEK_TIMEOUT;
 
     if (!this.baseUrl) {
       throw new Error('Base URL is required. Set DEEPSEEK_BASE_URL environment variable or pass baseUrl in config.');
