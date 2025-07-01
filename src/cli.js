@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 const { program } = require("commander");
-const inquirer = require("inquirer");
+const inquirer = require("inquirer").default || require("inquirer");
 const chalk = require("chalk");
 const ora = require("ora");
-const DeepSeekClient = require("./DeepSeekClient");
+const AIClient = require("./AIClient");
 const ConfigHelper = require("./ConfigHelper");
 require("dotenv").config();
 
@@ -12,20 +12,18 @@ require("dotenv").config();
 let client;
 
 try {
-  client = new DeepSeekClient();
+  client = new AIClient();
 } catch (error) {
   console.error(chalk.red("❌ Error initializing AI client:"));
   console.error(chalk.red(error.message));
   console.log(
     chalk.yellow("\n💡 Make sure to set your environment variables:"),
   );
-  console.log(chalk.cyan("\n📋 For DeepSeek (default):"));
-  console.log(chalk.cyan("   DEEPSEEK_BASE_URL=http://your-droplet-ip"));
-  console.log(chalk.cyan("   DEEPSEEK_TOKEN=your-token-here"));
-  console.log(chalk.cyan("\n📋 For OpenAI:"));
-  console.log(chalk.cyan("   API_FORMAT=openai"));
-  console.log(chalk.cyan("   OPENAI_BASE_URL=https://api.openai.com"));
-  console.log(chalk.cyan("   OPENAI_API_KEY=your-openai-key"));
+  console.log(chalk.cyan("\n📋 Required configuration:"));
+  console.log(chalk.cyan("   API_FORMAT=deepseek or openai"));
+  console.log(chalk.cyan("   BASE_URL=http://your-server-url"));
+  console.log(chalk.cyan("   API_KEY=your-api-key"));
+  console.log(chalk.cyan("   MODEL=your-model-name"));
   console.log(chalk.yellow("\nOr create a .env file with these values."));
   process.exit(1);
 }
@@ -88,6 +86,7 @@ program
               { name: "📝 Use a template", value: "template" },
               { name: "📋 List templates", value: "list" },
               { name: "➕ Create new template", value: "create" },
+              { name: "🌐 MCP tools", value: "mcp" },
               { name: "🔍 Test connection", value: "test" },
               { name: "🚪 Exit", value: "exit" },
             ],
@@ -235,6 +234,181 @@ program
           }
         }
 
+        if (action === "mcp") {
+          const mcpActions = [
+            { name: "🔌 Connect to MCP servers", value: "connect" },
+            { name: "🔧 List MCP tools", value: "tools" },
+            { name: "📚 List MCP resources", value: "resources" },
+            { name: "📝 List MCP prompts", value: "prompts" },
+            { name: "⚡ Call MCP tool", value: "call" },
+            { name: "🔌 Disconnect MCP servers", value: "disconnect" },
+          ];
+
+          const { mcpAction } = await inquirer.prompt([
+            {
+              type: "list",
+              name: "mcpAction",
+              message: "Choose MCP action:",
+              choices: mcpActions,
+            },
+          ]);
+
+          if (mcpAction === "connect") {
+            const spinner = ora("Connecting to MCP servers...").start();
+            try {
+              await client.initializeMcp();
+              spinner.stop();
+              console.log(chalk.green("✅ MCP servers connected!"));
+
+              const tools = client.getMcpTools();
+              const resources = client.getMcpResources();
+              const prompts = client.getMcpPrompts();
+
+              console.log(
+                chalk.cyan(
+                  `📦 Loaded ${tools.length} tools, ${resources.length} resources, ${prompts.length} prompts`,
+                ),
+              );
+            } catch (error) {
+              spinner.stop();
+              handleError(error);
+            }
+          } else if (mcpAction === "tools") {
+            const tools = client.getMcpTools();
+            if (tools.length === 0) {
+              console.log(
+                chalk.yellow(
+                  "📭 No MCP tools available. Connect to servers first.",
+                ),
+              );
+            } else {
+              console.log(
+                chalk.blue(`\n🔧 Available MCP Tools (${tools.length}):`),
+              );
+              tools.forEach((tool, index) => {
+                console.log(
+                  chalk.cyan(
+                    `  ${index + 1}. ${tool.name} (${tool.serverName})`,
+                  ),
+                );
+                if (tool.description) {
+                  console.log(chalk.gray(`     ${tool.description}`));
+                }
+              });
+            }
+          } else if (mcpAction === "resources") {
+            const resources = client.getMcpResources();
+            if (resources.length === 0) {
+              console.log(
+                chalk.yellow(
+                  "📭 No MCP resources available. Connect to servers first.",
+                ),
+              );
+            } else {
+              console.log(
+                chalk.blue(
+                  `\n📚 Available MCP Resources (${resources.length}):`,
+                ),
+              );
+              resources.forEach((resource, index) => {
+                console.log(
+                  chalk.cyan(
+                    `  ${index + 1}. ${resource.name || resource.uri} (${resource.serverName})`,
+                  ),
+                );
+                if (resource.description) {
+                  console.log(chalk.gray(`     ${resource.description}`));
+                }
+              });
+            }
+          } else if (mcpAction === "prompts") {
+            const prompts = client.getMcpPrompts();
+            if (prompts.length === 0) {
+              console.log(
+                chalk.yellow(
+                  "📭 No MCP prompts available. Connect to servers first.",
+                ),
+              );
+            } else {
+              console.log(
+                chalk.blue(`\n📝 Available MCP Prompts (${prompts.length}):`),
+              );
+              prompts.forEach((prompt, index) => {
+                console.log(
+                  chalk.cyan(
+                    `  ${index + 1}. ${prompt.name} (${prompt.serverName})`,
+                  ),
+                );
+                if (prompt.description) {
+                  console.log(chalk.gray(`     ${prompt.description}`));
+                }
+              });
+            }
+          } else if (mcpAction === "call") {
+            const tools = client.getMcpTools();
+            if (tools.length === 0) {
+              console.log(
+                chalk.yellow(
+                  "📭 No MCP tools available. Connect to servers first.",
+                ),
+              );
+            } else {
+              const { toolName } = await inquirer.prompt([
+                {
+                  type: "list",
+                  name: "toolName",
+                  message: "Choose tool to call:",
+                  choices: tools.map((tool) => ({
+                    name: `${tool.name} - ${tool.description || "No description"}`,
+                    value: tool.name,
+                  })),
+                },
+              ]);
+
+              const { toolArgs } = await inquirer.prompt([
+                {
+                  type: "input",
+                  name: "toolArgs",
+                  message: "Tool arguments (JSON format):",
+                  default: "{}",
+                },
+              ]);
+
+              let args = {};
+              try {
+                args = JSON.parse(toolArgs);
+              } catch (error) {
+                console.log(chalk.red("❌ Invalid JSON format"));
+                continue;
+              }
+
+              const spinner = ora(`Calling tool: ${toolName}...`).start();
+              try {
+                const result = await client.callMcpTool(toolName, args);
+                spinner.stop();
+
+                console.log(chalk.green(`\n🔧 Tool Result: ${toolName}`));
+                console.log(chalk.white("─".repeat(50)));
+                console.log(JSON.stringify(result, null, 2));
+                console.log(chalk.white("─".repeat(50)));
+              } catch (error) {
+                spinner.stop();
+                handleError(error);
+              }
+            }
+          } else if (mcpAction === "disconnect") {
+            const spinner = ora("Disconnecting from MCP servers...").start();
+            try {
+              await client.disconnectMcp();
+              spinner.stop();
+              console.log(chalk.green("✅ MCP servers disconnected!"));
+            } catch (error) {
+              spinner.stop();
+              handleError(error);
+            }
+          }
+        }
+
         if (action === "test") {
           const spinner = ora("Testing connection...").start();
           try {
@@ -273,7 +447,7 @@ program
   .command("ask <prompt>")
   .alias("a")
   .description("Send a quick prompt")
-  .option("-m, --model <model>", "Model to use", "deepseek-r1:8b")
+  .option("-m, --model <model>", "Model to use")
   .option("-s, --stream", "Enable streaming response")
   .action(async (prompt, options) => {
     const spinner = ora("Thinking...").start();
@@ -293,14 +467,15 @@ program
               fullResponse += chunk.response;
             }
           },
-          { model: options.model },
+          options.model ? { model: options.model } : {},
         );
 
         console.log("\n" + chalk.white("─".repeat(50)));
       } else {
-        const response = await client.generate(prompt, {
-          model: options.model,
-        });
+        const response = await client.generate(
+          prompt,
+          options.model ? { model: options.model } : {},
+        );
         spinner.stop();
         formatResponse(response);
       }
@@ -316,7 +491,7 @@ program
   .alias("t")
   .description("Use a prompt template")
   .option("-v, --vars <vars>", "Variables in JSON format", "{}")
-  .option("-m, --model <model>", "Model to use", "deepseek-r1:8b")
+  .option("-m, --model <model>", "Model to use")
   .action(async (name, options) => {
     try {
       let variables = {};
@@ -330,9 +505,11 @@ program
       }
 
       const spinner = ora("Thinking...").start();
-      const response = await client.generateFromTemplate(name, variables, {
-        model: options.model,
-      });
+      const response = await client.generateFromTemplate(
+        name,
+        variables,
+        options.model ? { model: options.model } : {},
+      );
       spinner.stop();
       formatResponse(response);
     } catch (error) {
@@ -511,6 +688,221 @@ program
     }
   });
 
+// Command: MCP management
+program
+  .command("mcp")
+  .description("Manage MCP (Model Context Protocol) servers")
+  .option("-l, --list", "List available MCP tools, resources, and prompts")
+  .option("-t, --tools", "List available MCP tools")
+  .option("-r, --resources", "List available MCP resources")
+  .option("-p, --prompts", "List available MCP prompts")
+  .option("-c, --call <tool>", "Call an MCP tool")
+  .option("-a, --args <args>", "Arguments for MCP tool (JSON format)", "{}")
+  .option("--connect", "Connect to MCP servers")
+  .option("--disconnect", "Disconnect from MCP servers")
+  .action(async (options) => {
+    try {
+      if (options.connect) {
+        const spinner = ora("Connecting to MCP servers...").start();
+        try {
+          await client.initializeMcp();
+          spinner.stop();
+          console.log(chalk.green("✅ MCP servers connected!"));
+
+          const tools = client.getMcpTools();
+          const resources = client.getMcpResources();
+          const prompts = client.getMcpPrompts();
+
+          console.log(
+            chalk.cyan(
+              `📦 Loaded ${tools.length} tools, ${resources.length} resources, ${prompts.length} prompts`,
+            ),
+          );
+        } catch (error) {
+          spinner.stop();
+          handleError(error);
+        }
+        return;
+      }
+
+      if (options.disconnect) {
+        const spinner = ora("Disconnecting from MCP servers...").start();
+        try {
+          await client.disconnectMcp();
+          spinner.stop();
+          console.log(chalk.green("✅ MCP servers disconnected!"));
+        } catch (error) {
+          spinner.stop();
+          handleError(error);
+        }
+        return;
+      }
+
+      if (options.call) {
+        let args = {};
+        try {
+          args = JSON.parse(options.args);
+        } catch (error) {
+          console.log(chalk.red("❌ Invalid JSON format for arguments"));
+          return;
+        }
+
+        const spinner = ora(`Calling MCP tool: ${options.call}...`).start();
+        try {
+          const result = await client.callMcpTool(options.call, args);
+          spinner.stop();
+
+          console.log(chalk.green(`\n🔧 MCP Tool Result: ${options.call}`));
+          console.log(chalk.white("─".repeat(50)));
+          console.log(JSON.stringify(result, null, 2));
+          console.log(chalk.white("─".repeat(50)));
+        } catch (error) {
+          spinner.stop();
+          handleError(error);
+        }
+        return;
+      }
+
+      if (options.tools) {
+        const tools = client.getMcpTools();
+        if (tools.length === 0) {
+          console.log(
+            chalk.yellow(
+              "📭 No MCP tools available. Connect to MCP servers first.",
+            ),
+          );
+          console.log(chalk.gray("   Run: node src/cli.js mcp --connect"));
+        } else {
+          console.log(
+            chalk.blue(`\n🔧 Available MCP Tools (${tools.length}):`),
+          );
+          console.log(chalk.white("─".repeat(50)));
+          tools.forEach((tool, index) => {
+            console.log(chalk.cyan(`${index + 1}. ${tool.name}`));
+            if (tool.description) {
+              console.log(chalk.gray(`   ${tool.description}`));
+            }
+            console.log(chalk.gray(`   Server: ${tool.serverName}`));
+            if (tool.inputSchema?.properties) {
+              const params = Object.keys(tool.inputSchema.properties);
+              console.log(chalk.gray(`   Parameters: ${params.join(", ")}`));
+            }
+            console.log();
+          });
+        }
+        return;
+      }
+
+      if (options.resources) {
+        const resources = client.getMcpResources();
+        if (resources.length === 0) {
+          console.log(
+            chalk.yellow(
+              "📭 No MCP resources available. Connect to MCP servers first.",
+            ),
+          );
+        } else {
+          console.log(
+            chalk.blue(`\n📚 Available MCP Resources (${resources.length}):`),
+          );
+          console.log(chalk.white("─".repeat(50)));
+          resources.forEach((resource, index) => {
+            console.log(
+              chalk.cyan(`${index + 1}. ${resource.name || resource.uri}`),
+            );
+            if (resource.description) {
+              console.log(chalk.gray(`   ${resource.description}`));
+            }
+            console.log(chalk.gray(`   URI: ${resource.uri}`));
+            console.log(chalk.gray(`   Server: ${resource.serverName}`));
+            console.log();
+          });
+        }
+        return;
+      }
+
+      if (options.prompts) {
+        const prompts = client.getMcpPrompts();
+        if (prompts.length === 0) {
+          console.log(
+            chalk.yellow(
+              "📭 No MCP prompts available. Connect to MCP servers first.",
+            ),
+          );
+        } else {
+          console.log(
+            chalk.blue(`\n📝 Available MCP Prompts (${prompts.length}):`),
+          );
+          console.log(chalk.white("─".repeat(50)));
+          prompts.forEach((prompt, index) => {
+            console.log(chalk.cyan(`${index + 1}. ${prompt.name}`));
+            if (prompt.description) {
+              console.log(chalk.gray(`   ${prompt.description}`));
+            }
+            console.log(chalk.gray(`   Server: ${prompt.serverName}`));
+            console.log();
+          });
+        }
+        return;
+      }
+
+      if (options.list) {
+        const tools = client.getMcpTools();
+        const resources = client.getMcpResources();
+        const prompts = client.getMcpPrompts();
+
+        console.log(chalk.blue("\n🌐 MCP Server Status:"));
+        console.log(chalk.white("─".repeat(40)));
+        console.log(chalk.cyan(`Tools: ${tools.length}`));
+        console.log(chalk.cyan(`Resources: ${resources.length}`));
+        console.log(chalk.cyan(`Prompts: ${prompts.length}`));
+
+        if (tools.length > 0 || resources.length > 0 || prompts.length > 0) {
+          console.log(chalk.green("\n✅ MCP servers are connected and loaded"));
+          console.log(chalk.gray("\nUse specific options to see details:"));
+          console.log(chalk.gray("  --tools     Show available tools"));
+          console.log(chalk.gray("  --resources Show available resources"));
+          console.log(chalk.gray("  --prompts   Show available prompts"));
+        } else {
+          console.log(
+            chalk.yellow("\n⚠️  No MCP data loaded. Connect to servers first:"),
+          );
+          console.log(chalk.gray("  node src/cli.js mcp --connect"));
+        }
+        return;
+      }
+
+      // Default: show MCP status and help
+      console.log(chalk.blue("🌐 MCP (Model Context Protocol) Management"));
+      console.log(chalk.white("═".repeat(50)));
+
+      const tools = client.getMcpTools();
+      const resources = client.getMcpResources();
+      const prompts = client.getMcpPrompts();
+
+      console.log(chalk.cyan(`Current Status:`));
+      console.log(chalk.gray(`  Tools: ${tools.length}`));
+      console.log(chalk.gray(`  Resources: ${resources.length}`));
+      console.log(chalk.gray(`  Prompts: ${prompts.length}`));
+
+      console.log(chalk.blue("\n📚 Available Commands:"));
+      console.log(
+        chalk.gray("  --connect              Connect to MCP servers"),
+      );
+      console.log(
+        chalk.gray("  --disconnect           Disconnect from servers"),
+      );
+      console.log(chalk.gray("  --list                 Show overview"));
+      console.log(chalk.gray("  --tools                List tools"));
+      console.log(chalk.gray("  --resources            List resources"));
+      console.log(chalk.gray("  --prompts              List prompts"));
+      console.log(chalk.gray("  --call <tool>          Call a tool"));
+      console.log(chalk.gray("  --args '{...}'         Tool arguments (JSON)"));
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
 // Command: Configuration management
 program
   .command("config")
@@ -564,7 +956,7 @@ program
           chalk.blue(`🔄 Switching to ${format.toUpperCase()} format...`),
         );
 
-        const { confirmed } = await inquirer.prompt([
+        const answers = await inquirer.prompt([
           {
             type: "confirm",
             name: "confirmed",
@@ -572,6 +964,7 @@ program
             default: false,
           },
         ]);
+        const { confirmed } = answers;
 
         if (!confirmed) {
           console.log(chalk.yellow("Operation cancelled."));
@@ -594,8 +987,8 @@ program
       console.log(chalk.blue("🛠️  Interactive Configuration Setup"));
       console.log(chalk.white("═".repeat(50)));
 
-      const result = await configHelper.createConfigInteractive(
-        inquirer.prompt.bind(inquirer),
+      const result = await configHelper.createConfigInteractive((questions) =>
+        inquirer.prompt(questions),
       );
 
       if (result.validation.valid) {

@@ -1,6 +1,6 @@
-# AI Client - OpenAI & DeepSeek Compatible
+# AI Client - OpenAI & DeepSeek Compatible with MCP Support
 
-A friendly and feature-rich client for communicating with AI models. Supports both OpenAI and DeepSeek API formats with full backward compatibility. This client provides both CLI and programmatic interfaces with support for reusable prompt templates.
+A friendly and feature-rich client for communicating with AI models. Supports both OpenAI and DeepSeek API formats. This client provides both CLI and programmatic interfaces with support for reusable prompt templates and Model Context Protocol (MCP) server integration.
 
 ## Features
 
@@ -27,20 +27,31 @@ A friendly and feature-rich client for communicating with AI models. Supports bo
 
 4. Edit `.env` with your actual values:
 
-   **For DeepSeek (original format):**
+   **Configuration:**
    ```env
+   # For DeepSeek
    API_FORMAT=deepseek
-   DEEPSEEK_BASE_URL=http://your-droplet-ip
-   DEEPSEEK_TOKEN=your-token-here
-   DEEPSEEK_MODEL=deepseek-r1:8b
+   BASE_URL=http://your-droplet-ip
+   API_KEY=your-deepseek-token
+   MODEL=deepseek-r1:8b
+
+   # For OpenAI
+   API_FORMAT=openai
+   BASE_URL=https://api.openai.com
+   API_KEY=your-openai-key
+   MODEL=gpt-4
+
+   # For Custom API
+   API_FORMAT=openai
+   BASE_URL=http://your-custom-server
+   API_KEY=your-custom-key
+   MODEL=your-model-name
    ```
 
-   **For OpenAI:**
+   **With MCP Integration:**
    ```env
-   API_FORMAT=openai
-   OPENAI_BASE_URL=https://api.openai.com
-   OPENAI_API_KEY=your-openai-key-here
-   OPENAI_MODEL=gpt-4
+   MCP_ENABLED=true
+   MCP_SERVERS='[{"name":"filesystem","command":"npx @modelcontextprotocol/server-filesystem /path","transport":"stdio"}]'
    ```
 
 ## Quick Start
@@ -116,27 +127,55 @@ node src/cli.js magento2 --quick
 node src/cli.js magento2 --file ticket.txt
 ```
 
+#### MCP (Model Context Protocol) Integration
+```bash
+# Connect to MCP servers
+node src/cli.js mcp --connect
+
+# List available MCP tools
+node src/cli.js mcp --tools
+
+# Call an MCP tool
+node src/cli.js mcp --call list_directory --args '{"path": "/tmp"}'
+
+# Interactive MCP management
+node src/cli.js interactive
+# Then choose "🌐 MCP tools"
+```
+
 ### Programmatic Usage
 
 ```javascript
-const DeepSeekClient = require('./src/index.js');
+const AIClient = require('./src/index.js');
 
 // Initialize client (auto-detects API format from environment)
-const client = new DeepSeekClient();
+const client = new AIClient();
 
-// Or specify API format explicitly
-const deepseekClient = new DeepSeekClient({
+// Or specify configuration explicitly
+const deepseekClient = new AIClient({
   apiFormat: 'deepseek',
-  baseUrl: 'http://your-droplet-ip',
-  token: 'your-token-here',
+  baseUrl: 'http://your-server-url',
+  token: 'your-api-key',
   model: 'deepseek-r1:8b'
 });
 
-const openaiClient = new DeepSeekClient({
+const openaiClient = new AIClient({
   apiFormat: 'openai',
   baseUrl: 'https://api.openai.com',
   token: 'your-openai-key',
   model: 'gpt-4'
+});
+
+// MCP-enabled client
+const mcpClient = new AIClient({
+  mcpEnabled: true,
+  mcpServers: [
+    {
+      name: 'filesystem',
+      command: 'npx @modelcontextprotocol/server-filesystem /workspace',
+      transport: 'stdio'
+    }
+  ]
 });
 
 // Simple generation
@@ -154,6 +193,21 @@ async function example() {
       context: 'machine learning project'
     });
     console.log(templateResponse.response);
+
+    // MCP integration
+    await mcpClient.initializeMcp();
+    const tools = mcpClient.getMcpTools();
+    console.log(`Available MCP tools: ${tools.map(t => t.name).join(', ')}`);
+
+    // Call MCP tool
+    const files = await mcpClient.callMcpTool('list_directory', { path: '/workspace' });
+    console.log('Files:', files);
+
+    // Enhanced generation with MCP
+    const enhancedResponse = await mcpClient.generateWithMcp(
+      'Can you list the files in my workspace and analyze the project structure?'
+    );
+    console.log(enhancedResponse.response);
 
     // Magento 2 ticket analysis
     const magentoAnalysis = await client.generateFromTemplate('magento2-ticket-analysis', {
@@ -206,6 +260,23 @@ Templates are stored in the `prompts/` directory as `.txt` files. They support v
 
 6. **magento2-quick-clarify.txt** - Quick Magento 2 ticket clarification
    - Variables: `ticket_content`, `magento_version`, `project_type`
+
+### MCP (Model Context Protocol) Integration
+
+Connect to external tools and services through MCP servers:
+
+**Available MCP Transports:**
+- **stdio** - Process-based communication
+- **websocket** - WebSocket connections  
+- **sse** - Server-Sent Events
+
+**Common MCP Servers:**
+- Filesystem access
+- Database queries
+- Web search
+- Calculator/math
+- Git operations
+- API integrations
 
 ### Creating Custom Templates
 
@@ -313,6 +384,54 @@ Get current API format.
 
 **Returns:** string - Current API format ('openai' or 'deepseek')
 
+##### `initializeMcp()`
+Initialize MCP server connections.
+
+**Returns:** Promise<void>
+
+##### `getMcpTools()`
+Get available MCP tools.
+
+**Returns:** Array - Array of tool definitions
+
+##### `callMcpTool(toolName, arguments, serverName)`
+Call an MCP tool.
+
+**Parameters:**
+- `toolName` (string) - Name of the tool to call
+- `arguments` (object, optional) - Tool arguments
+- `serverName` (string, optional) - Specific server name
+
+**Returns:** Promise<object> - Tool result
+
+##### `getMcpResources()`
+Get available MCP resources.
+
+**Returns:** Array - Array of resource definitions
+
+##### `readMcpResource(uri, serverName)`
+Read an MCP resource.
+
+**Parameters:**
+- `uri` (string) - Resource URI
+- `serverName` (string, optional) - Specific server name
+
+**Returns:** Promise<object> - Resource content
+
+##### `generateWithMcp(prompt, options)`
+Generate response with MCP tool integration.
+
+**Parameters:**
+- `prompt` (string) - The prompt to send
+- `options` (object, optional) - Generation options
+
+**Returns:** Promise<object> - Enhanced response with tool capabilities
+
+##### `disconnectMcp()`
+Disconnect all MCP servers.
+
+**Returns:** Promise<void>
+
 ## CLI Commands
 
 | Command | Alias | Description | Example |
@@ -323,6 +442,7 @@ Get current API format.
 | `list` | `l` | List templates | `node src/cli.js list` |
 | `test` | - | Test connection | `node src/cli.js test` |
 | `config` | `c` | Manage API configuration | `node src/cli.js config` |
+| `mcp` | - | Manage MCP servers | `node src/cli.js mcp` |
 | `magento2` | `m2` | Analyze Magento 2 tickets | `node src/cli.js magento2` |
 
 ### CLI Options
@@ -333,6 +453,9 @@ Get current API format.
 - `--show` - Show current configuration (config command)
 - `--format <format>` - Switch API format (config command)
 - `--quick` - Quick analysis mode (magento2 command)
+- `--tools` - List MCP tools (mcp command)
+- `--call <tool>` - Call MCP tool (mcp command)
+- `--connect` - Connect to MCP servers (mcp command)
 
 ## Configuration
 
@@ -340,61 +463,64 @@ Get current API format.
 
 The client supports both OpenAI and DeepSeek API formats:
 
-**DeepSeek Format (Original/Default):**
-- Endpoint: `/api/generate`
-- Request: `{"model": "...", "prompt": "...", "stream": false}`
-- Backward compatible with existing setups
+**Configuration:**
+The client uses universal environment variables that work with any AI service:
+- `BASE_URL` - Your AI service endpoint
+- `API_KEY` - Your authentication token
+- `MODEL` - Model name to use
+- `API_FORMAT` - Service type (deepseek/openai)
 
-**OpenAI Format:**
-- Endpoint: `/v1/chat/completions`
-- Request: `{"model": "...", "messages": [...], "stream": false}`
-- Compatible with OpenAI API and other OpenAI-compatible services
+**API Format Support:**
+- **DeepSeek Format**: `/api/generate` endpoint with prompt-based requests
+- **OpenAI Format**: `/v1/chat/completions` endpoint with message-based requests
+- **Auto-Detection**: Automatically detects format from URL patterns
 
 ### Configuration Options
 
-1. **Environment variables** (recommended):
+1. **Environment variables**:
 
-   **For DeepSeek:**
    ```env
    API_FORMAT=deepseek
-   DEEPSEEK_BASE_URL=http://your-droplet-ip
-   DEEPSEEK_TOKEN=your-token-here
-   DEEPSEEK_MODEL=deepseek-r1:8b
-   DEEPSEEK_TIMEOUT=30000
-   ```
-
-   **For OpenAI:**
-   ```env
-   API_FORMAT=openai
-   OPENAI_BASE_URL=https://api.openai.com
-   OPENAI_API_KEY=your-openai-key-here
-   OPENAI_MODEL=gpt-4
-   DEEPSEEK_TIMEOUT=30000
+   BASE_URL=http://your-server-url
+   API_KEY=your-api-key-here
+   MODEL=your-model-name
+   TIMEOUT=30000
    ```
 
 2. **Configuration object**:
    ```javascript
-   // DeepSeek
-   const client = new DeepSeekClient({
+   // DeepSeek configuration
+   const client = new AIClient({
      apiFormat: 'deepseek',
-     baseUrl: 'http://your-droplet-ip',
-     token: 'your-token-here',
-     model: 'deepseek-r1:8b'
+     baseUrl: 'http://your-server-url',
+     token: 'your-api-key',
+     model: 'your-model-name'
    });
 
-   // OpenAI
-   const client = new DeepSeekClient({
+   // OpenAI configuration
+   const openaiClient = new AIClient({
      apiFormat: 'openai',
      baseUrl: 'https://api.openai.com',
      token: 'your-openai-key',
      model: 'gpt-4'
    });
+
+   // With MCP support
+   const mcpClient = new AIClient({
+     mcpEnabled: true,
+     mcpServers: [
+       {
+         name: 'filesystem',
+         command: 'npx @modelcontextprotocol/server-filesystem /workspace',
+         transport: 'stdio'
+       }
+     ]
+   });
    ```
 
 3. **Auto-detection**: If `API_FORMAT` is not set, the client auto-detects based on:
-   - Available environment variables
    - Base URL patterns (detects `openai.com`)
-   - Defaults to DeepSeek format for backward compatibility
+   - Defaults to DeepSeek format
 
 ## Error Handling
 
@@ -434,27 +560,76 @@ console.log(response.response);
 console.log('Using API format:', client.getApiFormat());
 ```
 
-### API Format Examples
+### Configuration Examples
 ```javascript
-// Using DeepSeek format
-const deepseekClient = new DeepSeekClient({
-  apiFormat: 'deepseek',
-  baseUrl: 'http://your-droplet-ip',
-  token: 'your-token',
-  model: 'deepseek-r1:8b'
-});
+// Universal configuration approach
+const createClient = (format, url, key, model) => {
+  return new AIClient({
+    apiFormat: format,
+    baseUrl: url,
+    token: key,
+    model: model
+  });
+};
 
-// Using OpenAI format
-const openaiClient = new DeepSeekClient({
-  apiFormat: 'openai',
-  baseUrl: 'https://api.openai.com',
-  token: 'your-openai-key',
-  model: 'gpt-4'
-});
+// DeepSeek server
+const deepseekClient = createClient(
+  'deepseek',
+  'http://your-server-url',
+  'your-api-key',
+  'deepseek-r1:8b'
+);
 
-// Both work the same way
+// OpenAI service
+const openaiClient = createClient(
+  'openai',
+  'https://api.openai.com',
+  'your-openai-key',
+  'gpt-4'
+);
+
+// Custom API
+const customClient = createClient(
+  'openai',
+  'http://your-custom-server',
+  'your-custom-key',
+  'your-model'
+);
+
+// All work the same way
 const response1 = await deepseekClient.generate('Hello');
 const response2 = await openaiClient.generate('Hello');
+const response3 = await customClient.generate('Hello');
+```
+
+### MCP Integration Examples
+```javascript
+// Initialize MCP client
+const mcpClient = new AIClient({
+  mcpEnabled: true,
+  mcpServers: [
+    {
+      name: 'filesystem',
+      command: 'npx @modelcontextprotocol/server-filesystem /workspace',
+      transport: 'stdio'
+    }
+  ]
+});
+
+// Connect to MCP servers
+await mcpClient.initializeMcp();
+
+// List available tools
+const tools = mcpClient.getMcpTools();
+console.log('Available tools:', tools.map(t => t.name));
+
+// Call a tool
+const files = await mcpClient.callMcpTool('list_directory', { path: '/workspace' });
+
+// Enhanced generation with tool context
+const response = await mcpClient.generateWithMcp(
+  'Can you analyze the files in my workspace and suggest improvements?'
+);
 ```
 
 ### Code Review
@@ -532,19 +707,23 @@ console.log('\n');
 ### Common Issues
 
 1. **"Base URL is required" error**
-   - For DeepSeek: Set `DEEPSEEK_BASE_URL` in your `.env` file
-   - For OpenAI: Set `OPENAI_BASE_URL` in your `.env` file
+   - Set `BASE_URL` in your `.env` file
    - Check URL format is correct (include `http://` or `https://`)
 
 2. **"Authorization token is required" error**
-   - For DeepSeek: Set `DEEPSEEK_TOKEN` in your `.env` file
-   - For OpenAI: Set `OPENAI_API_KEY` in your `.env` file
+   - Set `API_KEY` in your `.env` file
    - Verify your token/key is correct
 
 3. **API format confusion**
    - Run `node src/cli.js config --show` to check current format
    - Use `node src/cli.js config --format openai` to switch formats
    - Check that model names match the API format
+
+4. **MCP connection issues**
+   - Verify MCP servers are installed: `npm install -g @modelcontextprotocol/server-filesystem`
+   - Test MCP connection: `node src/cli.js mcp --connect`
+   - Check MCP server status: `node src/cli.js mcp --tools`
+   - Validate MCP_SERVERS JSON format in .env file
 
 3. **Connection timeout**
    - Check if your server is running
@@ -569,6 +748,11 @@ node src/cli.js config
 # Switch between API formats
 node src/cli.js config --format openai
 node src/cli.js config --format deepseek
+
+# MCP management
+node src/cli.js mcp --connect          # Connect to MCP servers
+node src/cli.js mcp --tools            # List available tools
+node src/cli.js mcp --call <tool>      # Call a specific tool
 ```
 
 ### Debug Mode
@@ -599,20 +783,16 @@ If you encounter issues:
 3. Test the connection with `node src/cli.js test`
 4. Check server logs for additional information
 
-## Migration from DeepSeek-only
+## Configuration Format
 
-If you're upgrading from a DeepSeek-only version:
-
-1. **No breaking changes**: Your existing setup continues to work
-2. **Add API format**: Add `API_FORMAT=deepseek` to your `.env` for explicit configuration
-3. **Optional**: Try OpenAI compatibility by switching format
+The client uses platform-agnostic environment variables:
 
 ```bash
-# Keep current setup working
-echo "API_FORMAT=deepseek" >> .env
-
-# Or try OpenAI format
-node src/cli.js config --format openai
+# Configure your environment
+API_FORMAT=deepseek
+BASE_URL=http://your-server-url
+API_KEY=your-api-key
+MODEL=your-model-name
 ```
 
 ## API Compatibility
@@ -626,7 +806,57 @@ This client abstracts the differences between API formats:
 | Templates | ✅ | ✅ | ✅ Works with both |
 | Error handling | ✅ | ✅ | ✅ Normalized errors |
 | Model parameters | ✅ | ✅ | ✅ Format-specific options |
+| MCP integration | ✅ | ✅ | ✅ External tool access |
 
 ---
+
+## MCP Server Examples
+
+Install and use popular MCP servers:
+
+```bash
+# Install MCP servers
+npm install -g @modelcontextprotocol/server-filesystem
+npm install -g @modelcontextprotocol/server-sqlite
+
+# Configure in .env
+API_FORMAT=deepseek
+BASE_URL=http://your-server-url
+API_KEY=your-api-key
+MODEL=your-model-name
+
+MCP_ENABLED=true
+MCP_SERVERS='[
+  {
+    "name": "filesystem",
+    "command": "npx @modelcontextprotocol/server-filesystem /workspace",
+    "transport": "stdio"
+  },
+  {
+    "name": "database",
+    "command": "npx @modelcontextprotocol/server-sqlite /data/app.db",
+    "transport": "stdio"
+  }
+]'
+
+# Test MCP integration
+node src/cli.js mcp --connect
+node src/cli.js mcp --tools
+node src/cli.js mcp --call list_directory --args '{"path": "/workspace"}'
+```
+
+## Quick Start with MCP
+
+1. **Install MCP server**: `npm install -g @modelcontextprotocol/server-filesystem`
+2. **Configure environment** in `.env`:
+   ```env
+   BASE_URL=http://your-server-url
+   API_KEY=your-api-key
+   MODEL=your-model-name
+   MCP_ENABLED=true
+   ```
+3. **Connect**: `node src/cli.js mcp --connect`
+4. **Use tools**: `node src/cli.js mcp --tools`
+5. **Enhanced AI**: Use `generateWithMcp()` for tool-aware responses
 
 Made with ❤️ for the AI development community

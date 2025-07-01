@@ -1,25 +1,25 @@
 #!/usr/bin/env node
 
-const fs = require('fs').promises;
-const path = require('path');
-const { spawn } = require('child_process');
-const readline = require('readline');
+const fs = require("fs").promises;
+const path = require("path");
+const { spawn } = require("child_process");
+const readline = require("readline");
 
 const rl = readline.createInterface({
   input: process.stdin,
-  output: process.stdout
+  output: process.stdout,
 });
 
 function question(prompt) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     rl.question(prompt, resolve);
   });
 }
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'inherit', ...options });
-    child.on('close', (code) => {
+    const child = spawn(command, args, { stdio: "inherit", ...options });
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
@@ -31,12 +31,12 @@ function runCommand(command, args, options = {}) {
 
 async function checkNodeVersion() {
   const version = process.version;
-  const majorVersion = parseInt(version.slice(1).split('.')[0]);
+  const majorVersion = parseInt(version.slice(1).split(".")[0]);
 
   if (majorVersion < 14) {
-    console.log('❌ Node.js version 14 or higher is required.');
+    console.log("❌ Node.js version 14 or higher is required.");
     console.log(`   Current version: ${version}`);
-    console.log('   Please upgrade Node.js and try again.');
+    console.log("   Please upgrade Node.js and try again.");
     process.exit(1);
   }
 
@@ -44,129 +44,211 @@ async function checkNodeVersion() {
 }
 
 async function installDependencies() {
-  console.log('\n📦 Installing dependencies...');
+  console.log("\n📦 Installing dependencies...");
 
   try {
-    await runCommand('npm', ['install']);
-    console.log('✅ Dependencies installed successfully!');
+    await runCommand("npm", ["install"]);
+    console.log("✅ Dependencies installed successfully!");
   } catch (error) {
-    console.log('❌ Failed to install dependencies with npm.');
-    console.log('   Trying with yarn...');
+    console.log("❌ Failed to install dependencies with npm.");
+    console.log("   Trying with yarn...");
 
     try {
-      await runCommand('yarn', ['install']);
-      console.log('✅ Dependencies installed successfully with yarn!');
+      await runCommand("yarn", ["install"]);
+      console.log("✅ Dependencies installed successfully with yarn!");
     } catch (yarnError) {
-      console.log('❌ Failed to install dependencies with both npm and yarn.');
-      console.log('   Please install dependencies manually: npm install');
+      console.log("❌ Failed to install dependencies with both npm and yarn.");
+      console.log("   Please install dependencies manually: npm install");
       throw error;
     }
   }
 }
 
 async function createEnvFile() {
-  console.log('\n🔧 Setting up environment configuration...');
+  console.log("\n🔧 Setting up environment configuration...");
 
-  const envPath = path.join(__dirname, '.env');
-  const envExamplePath = path.join(__dirname, '.env.example');
+  const envPath = path.join(__dirname, ".env");
+  const envExamplePath = path.join(__dirname, ".env.example");
 
   try {
     // Check if .env already exists
     await fs.access(envPath);
-    console.log('📄 .env file already exists.');
+    console.log("📄 .env file already exists.");
 
-    const overwrite = await question('   Do you want to overwrite it? (y/N): ');
-    if (overwrite.toLowerCase() !== 'y' && overwrite.toLowerCase() !== 'yes') {
-      console.log('   Keeping existing .env file.');
+    const overwrite = await question("   Do you want to overwrite it? (y/N): ");
+    if (overwrite.toLowerCase() !== "y" && overwrite.toLowerCase() !== "yes") {
+      console.log("   Keeping existing .env file.");
       return;
     }
   } catch (error) {
     // .env doesn't exist, that's expected
   }
 
-  console.log('\n📝 Please provide your DeepSeek server configuration:');
+  console.log("\n📝 Please choose an API format:");
+  console.log("   1. Self-hosted LLM (default)");
+  console.log("   2. OpenAI Compatible");
+  console.log("   3. Custom API");
 
-  const baseUrl = await question('   Server URL (e.g., http://your-droplet-ip): ');
-  if (!baseUrl.trim()) {
-    console.log('❌ Server URL is required.');
-    process.exit(1);
+  const apiFormatChoice =
+    (await question("   Select format [1-3] (default: 1): ")) || "1";
+  let apiFormat = "deepseek"; // Default format for backward compatibility
+  let defaultModel = "deepseek-r1:8b";
+  let defaultBaseUrl = "http://your-server-url";
+
+  switch (apiFormatChoice) {
+    case "2":
+      apiFormat = "openai";
+      defaultModel = "gpt-4";
+      defaultBaseUrl = "https://api.openai.com";
+      break;
+    case "3":
+      apiFormat = "custom";
+      defaultModel = "your-model-name";
+      defaultBaseUrl = "http://your-custom-api";
+      break;
   }
 
-  const token = await question('   Authorization token: ');
+  console.log(
+    `\n📝 Please provide your ${apiFormat === "openai" ? "OpenAI" : "AI Server"} configuration:`,
+  );
+
+  const baseUrl =
+    (await question(`   Server URL (default: ${defaultBaseUrl}): `)) ||
+    defaultBaseUrl;
+
+  const token = await question("   Authorization token/API key: ");
   if (!token.trim()) {
-    console.log('❌ Authorization token is required.');
+    console.log("❌ API key/token is required.");
     process.exit(1);
   }
 
-  const model = await question('   Model name (default: deepseek-r1:8b): ') || 'deepseek-r1:8b';
-  const timeout = await question('   Request timeout in ms (default: 30000): ') || '30000';
+  const model =
+    (await question(`   Model name (default: ${defaultModel}): `)) ||
+    defaultModel;
+  const timeout =
+    (await question("   Request timeout in ms (default: 30000): ")) || "30000";
 
-  const envContent = `# DeepSeek Client Configuration
+  // Ask about MCP configuration
+  console.log("\n📝 Model Context Protocol (MCP) Configuration:");
+  const enableMcp = await question("   Enable MCP? (y/N): ");
+  const mcpEnabled =
+    enableMcp.toLowerCase() === "y" || enableMcp.toLowerCase() === "yes";
+
+  let mcpServers = "";
+  if (mcpEnabled) {
+    console.log("   Setting up basic filesystem MCP server...");
+    const workspacePath = process.cwd();
+
+    mcpServers = JSON.stringify(
+      [
+        {
+          name: "filesystem",
+          command: `npx @modelcontextprotocol/server-filesystem ${workspacePath}`,
+          transport: "stdio",
+        },
+      ],
+      null,
+      2,
+    );
+  }
+
+  const envContent = `# Universal AI Client Configuration
 # Generated by setup script on ${new Date().toISOString()}
 
-# Your DigitalOcean droplet IP address
-DEEPSEEK_BASE_URL=${baseUrl.trim()}
+# API Format: deepseek, openai, or custom
+API_FORMAT=${apiFormat}
 
-# Your authorization token
-DEEPSEEK_TOKEN=${token.trim()}
+# Server URL
+BASE_URL=${baseUrl.trim()}
+
+# Authorization token/API key
+API_KEY=${token.trim()}
 
 # Default model to use
-DEEPSEEK_MODEL=${model.trim()}
+MODEL=${model.trim()}
 
 # Request timeout in milliseconds
-DEEPSEEK_TIMEOUT=${timeout.trim()}
+TIMEOUT=${timeout.trim()}
+${
+  mcpEnabled
+    ? `
+# MCP Configuration
+MCP_ENABLED=true
+MCP_SERVERS='${mcpServers}'`
+    : ""
+}
 `;
 
   await fs.writeFile(envPath, envContent);
-  console.log('✅ .env file created successfully!');
+  console.log("✅ .env file created successfully!");
 }
 
 async function testConnection() {
-  console.log('\n🔍 Testing connection to your DeepSeek server...');
+  console.log("\n🔍 Testing connection to AI server...");
 
   try {
-    const DeepSeekClient = require('./src/DeepSeekClient');
-    const client = new DeepSeekClient();
+    const AIClient = require("./src/AIClient");
+    const client = new AIClient();
 
     const isConnected = await client.testConnection();
 
     if (isConnected) {
-      console.log('✅ Connection test successful!');
-      console.log('   Your DeepSeek client is ready to use.');
-    } else {
-      console.log('❌ Connection test failed.');
-      console.log('   Please check your server URL and token.');
+      console.log("✅ Connection test successful!");
+      console.log("   Your AI client is ready to use.");
 
-      const debug = await question('   Would you like to see debug information? (y/N): ');
-      if (debug.toLowerCase() === 'y' || debug.toLowerCase() === 'yes') {
+      // Show additional connection info if available
+      try {
+        const info = await client.getServerInfo();
+        console.log("   Server Info:");
+        console.log(`   • API Format: ${info.apiFormat || client.apiFormat}`);
+        console.log(`   • Base URL: ${info.baseUrl || client.baseUrl}`);
+        console.log(`   • Model: ${info.model || client.model}`);
+      } catch (infoError) {
+        // Silently ignore info errors
+      }
+    } else {
+      console.log("❌ Connection test failed.");
+      console.log("   Please check your server URL and API key.");
+
+      const debug = await question(
+        "   Would you like to see debug information? (y/N): ",
+      );
+      if (debug.toLowerCase() === "y" || debug.toLowerCase() === "yes") {
         try {
-          await client.generate('test');
+          await client.generate("test");
         } catch (error) {
-          console.log('   Debug error:', error.message);
+          console.log("   Debug error:", error.message);
         }
       }
     }
   } catch (error) {
-    console.log('❌ Connection test failed with error:', error.message);
-    console.log('   You can test the connection later with: node src/cli.js test');
+    console.log("❌ Connection test failed with error:", error.message);
+    console.log(
+      "   You can test the connection later with: node src/cli.js test",
+    );
   }
 }
 
 async function createPromptsDirectory() {
-  console.log('\n📁 Setting up prompts directory...');
+  console.log("\n📁 Setting up prompts directory...");
 
-  const promptsDir = path.join(__dirname, 'prompts');
+  const promptsDir = path.join(__dirname, "prompts");
 
   try {
     await fs.access(promptsDir);
-    console.log('✅ Prompts directory already exists.');
+    console.log("✅ Prompts directory already exists.");
   } catch (error) {
     await fs.mkdir(promptsDir, { recursive: true });
-    console.log('✅ Prompts directory created.');
+    console.log("✅ Prompts directory created.");
   }
 
   // Check if example templates exist
-  const exampleTemplates = ['code-review.txt', 'explain-concept.txt', 'brainstorm.txt', 'summarize.txt'];
+  const exampleTemplates = [
+    "code-review.txt",
+    "explain-concept.txt",
+    "brainstorm.txt",
+    "summarize.txt",
+  ];
   let missingTemplates = [];
 
   for (const template of exampleTemplates) {
@@ -179,54 +261,59 @@ async function createPromptsDirectory() {
 
   if (missingTemplates.length > 0) {
     console.log(`📝 Missing ${missingTemplates.length} example templates.`);
-    console.log('   Example templates should be created automatically during installation.');
+    console.log(
+      "   Example templates should be created automatically during installation.",
+    );
   } else {
-    console.log('✅ All example templates are present.');
+    console.log("✅ All example templates are present.");
   }
 }
 
 async function showUsageInstructions() {
-  console.log('\n🎉 Setup completed successfully!');
-  console.log('\n📚 Usage Instructions:');
-  console.log('─'.repeat(50));
+  console.log("\n🎉 Setup completed successfully!");
+  console.log("\n📚 Usage Instructions:");
+  console.log("─".repeat(50));
 
-  console.log('\n🚀 Quick Start:');
-  console.log('   npm start                    # Interactive mode');
+  console.log("\n🚀 Quick Start:");
+  console.log("   npm start                    # Interactive mode");
   console.log('   node src/cli.js ask "Hello"  # Quick prompt');
-  console.log('   node src/cli.js test         # Test connection');
-  console.log('   node src/cli.js list         # List templates');
+  console.log("   node src/cli.js test         # Test connection");
+  console.log("   node src/cli.js list         # List templates");
 
-  console.log('\n📝 Template Usage:');
-  console.log('   node src/cli.js template explain-concept');
-  console.log('   node src/cli.js template code-review');
-  console.log('   node src/cli.js template brainstorm');
+  console.log("\n📝 Template Usage:");
+  console.log("   node src/cli.js template explain-concept");
+  console.log("   node src/cli.js template code-review");
+  console.log("   node src/cli.js template brainstorm");
 
-  console.log('\n🛠️ Advanced:');
-  console.log('   node examples/basic-usage.js # Run examples');
-  console.log('   node src/cli.js --help       # Show all options');
+  console.log("\n🛠️ Advanced:");
+  console.log("   node examples/basic-usage.js # Run examples");
+  console.log("   node src/cli.js --help       # Show all options");
+  console.log("   node src/cli.js config       # Reconfigure client");
+  console.log("   node src/cli.js mcp          # Manage MCP servers");
 
-  console.log('\n📁 Files Created:');
-  console.log('   .env                # Your configuration');
-  console.log('   prompts/           # Template directory');
-  console.log('   node_modules/      # Dependencies');
+  console.log("\n📁 Files Created:");
+  console.log("   .env                # Your configuration");
+  console.log("   prompts/           # Template directory");
+  console.log("   node_modules/      # Dependencies");
 
-  console.log('\n💡 Tips:');
-  console.log('   • Add custom templates in the prompts/ folder');
-  console.log('   • Templates use {{variable}} syntax for substitution');
-  console.log('   • Use interactive mode for the best experience');
-  console.log('   • Check README.md for detailed documentation');
+  console.log("\n💡 Tips:");
+  console.log("   • Add custom templates in the prompts/ folder");
+  console.log("   • Templates use {{variable}} syntax for substitution");
+  console.log("   • Use interactive mode for the best experience");
+  console.log("   • Check README.md for detailed documentation");
 
-  console.log('\n🐛 If you encounter issues:');
-  console.log('   1. Run: node src/cli.js test');
-  console.log('   2. Check your .env file configuration');
-  console.log('   3. Verify your server is running and accessible');
-  console.log('   4. Review the README.md troubleshooting section');
+  console.log("\n🐛 If you encounter issues:");
+  console.log("   1. Run: node src/cli.js test");
+  console.log("   2. Check your .env file configuration");
+  console.log("   3. Verify your server is running and accessible");
+  console.log("   4. Run: node src/cli.js config --show");
+  console.log("   5. Review the README.md troubleshooting section");
 }
 
 async function main() {
-  console.log('🤖 DeepSeek Client Setup');
-  console.log('═'.repeat(50));
-  console.log('This script will help you set up the DeepSeek client.');
+  console.log("🤖 Universal AI Client Setup");
+  console.log("═".repeat(50));
+  console.log("This script will help you set up the Universal AI client.");
   console.log();
 
   try {
@@ -247,13 +334,12 @@ async function main() {
 
     // Step 6: Show usage instructions
     await showUsageInstructions();
-
   } catch (error) {
-    console.log('\n❌ Setup failed:', error.message);
-    console.log('\nYou may need to complete the setup manually:');
-    console.log('1. Run: npm install');
-    console.log('2. Copy .env.example to .env and fill in your values');
-    console.log('3. Test with: node src/cli.js test');
+    console.log("\n❌ Setup failed:", error.message);
+    console.log("\nYou may need to complete the setup manually:");
+    console.log("1. Run: npm install");
+    console.log("2. Create a .env file with your configuration");
+    console.log("3. Test with: node src/cli.js test");
     process.exit(1);
   } finally {
     rl.close();
@@ -261,9 +347,9 @@ async function main() {
 }
 
 // Handle Ctrl+C gracefully
-process.on('SIGINT', () => {
-  console.log('\n\n⚠️  Setup interrupted by user.');
-  console.log('You can run this setup script again anytime: node setup.js');
+process.on("SIGINT", () => {
+  console.log("\n\n⚠️  Setup interrupted by user.");
+  console.log("You can run this setup script again anytime: node setup.js");
   rl.close();
   process.exit(0);
 });

@@ -1,10 +1,10 @@
 {
-  "name": "ai-client-openai-deepseek",
+  "name": "universal-ai-client",
   "version": "2.0.0",
-  "description": "A friendly client for AI models - supports both OpenAI and DeepSeek API formats with full backward compatibility",
+  "description": "A universal AI client supporting multiple API formats (OpenAI, DeepSeek) with platform-agnostic configuration and MCP integration",
   "main": "src/index.js",
   "bin": {
-    "deepseek": "./src/cli.js"
+    "ai-client": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/cli.js",
@@ -12,19 +12,25 @@
     "example": "node examples/basic-usage.js",
     "example:api-formats": "node examples/api-formats-example.js",
     "example:magento2": "node examples/magento2-ticket-example.js",
+    "example:mcp": "node examples/mcp-integration-example.js",
     "config": "node src/cli.js config",
+    "mcp": "node src/cli.js mcp",
+    "mcp:connect": "node src/cli.js mcp --connect",
+    "mcp:tools": "node src/cli.js mcp --tools",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "openai",
-    "deepseek",
     "ai",
     "client",
+    "universal",
+    "openai",
+    "deepseek",
     "llm",
     "gpt",
     "chat",
-    "compatible",
-    "api"
+    "api",
+    "mcp",
+    "platform-agnostic"
   ],
   "author": "Your Name",
   "license": "MIT",
@@ -34,7 +40,9 @@
     "inquirer": "^9.2.0",
     "chalk": "^4.1.2",
     "ora": "^5.4.1",
-    "dotenv": "^16.3.0"
+    "dotenv": "^16.3.0",
+    "ws": "^8.14.0",
+    "eventsource": "^2.0.2"
   },
   "engines": {
     "node": ">=14.0.0"

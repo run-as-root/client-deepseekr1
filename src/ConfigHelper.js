@@ -1,10 +1,31 @@
-const fs = require('fs').promises;
-const path = require('path');
+const fs = require("fs").promises;
+const path = require("path");
 
 class ConfigHelper {
   constructor() {
-    this.envPath = path.join(process.cwd(), '.env');
-    this.envExamplePath = path.join(process.cwd(), '.env.example');
+    this.envPath = path.join(process.cwd(), ".env");
+    this.envExamplePath = path.join(process.cwd(), ".env.example");
+  }
+
+  /**
+   * Parse MCP servers from environment
+   * @private
+   */
+  _parseMcpServers() {
+    const serversEnv = process.env.MCP_SERVERS;
+    if (!serversEnv) {
+      return [];
+    }
+
+    try {
+      return JSON.parse(serversEnv);
+    } catch (error) {
+      console.error(
+        "Error parsing MCP_SERVERS environment variable:",
+        error.message,
+      );
+      return [];
+    }
   }
 
   /**
@@ -17,23 +38,18 @@ class ConfigHelper {
       return process.env.API_FORMAT.toLowerCase();
     }
 
-    // Auto-detect based on available variables
-    if (process.env.OPENAI_API_KEY && process.env.OPENAI_BASE_URL) {
-      return 'openai';
-    }
+    // Auto-detect based on BASE_URL patterns
+    const baseUrl = process.env.BASE_URL;
 
-    if (process.env.DEEPSEEK_TOKEN && process.env.DEEPSEEK_BASE_URL) {
-      return 'deepseek';
-    }
-
-    // Check base URL patterns
-    const baseUrl = process.env.DEEPSEEK_BASE_URL || process.env.OPENAI_BASE_URL;
-    if (baseUrl && (baseUrl.includes('openai.com') || baseUrl.includes('api.openai'))) {
-      return 'openai';
+    if (
+      baseUrl &&
+      (baseUrl.includes("openai.com") || baseUrl.includes("api.openai"))
+    ) {
+      return "openai";
     }
 
     // Default to deepseek for backward compatibility
-    return 'deepseek';
+    return "deepseek";
   }
 
   /**
@@ -43,23 +59,29 @@ class ConfigHelper {
   getCurrentConfig() {
     const apiFormat = this.detectApiFormat();
 
-    if (apiFormat === 'openai') {
-      return {
-        apiFormat: 'openai',
-        baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com',
-        token: process.env.OPENAI_API_KEY,
-        model: process.env.OPENAI_MODEL || 'gpt-4',
-        timeout: parseInt(process.env.DEEPSEEK_TIMEOUT || '30000')
-      };
-    } else {
-      return {
-        apiFormat: 'deepseek',
-        baseUrl: process.env.DEEPSEEK_BASE_URL,
-        token: process.env.DEEPSEEK_TOKEN,
-        model: process.env.DEEPSEEK_MODEL || 'deepseek-r1:8b',
-        timeout: parseInt(process.env.DEEPSEEK_TIMEOUT || '30000')
-      };
-    }
+    // Platform-agnostic configuration
+    const baseUrl =
+      process.env.BASE_URL ||
+      (apiFormat === "openai" ? "https://api.openai.com" : undefined);
+    const token = process.env.API_KEY;
+    const model =
+      process.env.MODEL ||
+      (apiFormat === "openai" ? "gpt-4" : "deepseek-r1:8b");
+    const timeout = parseInt(process.env.TIMEOUT || "30000");
+
+    const baseConfig = {
+      apiFormat,
+      baseUrl,
+      token,
+      model,
+      timeout,
+    };
+
+    // Add MCP configuration
+    baseConfig.mcpEnabled = process.env.MCP_ENABLED === "true";
+    baseConfig.mcpServers = this._parseMcpServers();
+
+    return baseConfig;
   }
 
   /**
@@ -73,22 +95,24 @@ class ConfigHelper {
 
     // Check required fields
     if (!config.baseUrl) {
-      const urlVar = config.apiFormat === 'openai' ? 'OPENAI_BASE_URL' : 'DEEPSEEK_BASE_URL';
-      errors.push(`Missing base URL. Set ${urlVar} environment variable.`);
+      errors.push(`Missing base URL. Set BASE_URL environment variable.`);
     }
 
     if (!config.token) {
-      const tokenVar = config.apiFormat === 'openai' ? 'OPENAI_API_KEY' : 'DEEPSEEK_TOKEN';
-      errors.push(`Missing API token. Set ${tokenVar} environment variable.`);
+      errors.push(`Missing API token. Set API_KEY environment variable.`);
     }
 
     // Check model compatibility
-    if (config.apiFormat === 'openai' && config.model.includes('deepseek')) {
-      warnings.push(`Using DeepSeek model "${config.model}" with OpenAI format. This may not work.`);
+    if (config.apiFormat === "openai" && config.model.includes("deepseek")) {
+      warnings.push(
+        `Using DeepSeek model "${config.model}" with OpenAI format. This may not work.`,
+      );
     }
 
-    if (config.apiFormat === 'deepseek' && config.model.startsWith('gpt-')) {
-      warnings.push(`Using OpenAI model "${config.model}" with DeepSeek format. This may not work.`);
+    if (config.apiFormat === "deepseek" && config.model.startsWith("gpt-")) {
+      warnings.push(
+        `Using OpenAI model "${config.model}" with DeepSeek format. This may not work.`,
+      );
     }
 
     // Check URL format
@@ -100,11 +124,31 @@ class ConfigHelper {
       }
     }
 
+    // Validate MCP configuration
+    if (config.mcpEnabled) {
+      if (!config.mcpServers || config.mcpServers.length === 0) {
+        warnings.push(
+          "MCP is enabled but no servers configured. Set MCP_SERVERS environment variable.",
+        );
+      } else {
+        for (const server of config.mcpServers) {
+          if (!server.name) {
+            warnings.push("MCP server missing name property.");
+          }
+          if (!server.serverUrl && !server.command) {
+            errors.push(
+              `MCP server "${server.name || "unnamed"}" missing serverUrl or command.`,
+            );
+          }
+        }
+      }
+    }
+
     return {
       valid: errors.length === 0,
       config,
       errors,
-      warnings
+      warnings,
     };
   }
 
@@ -116,50 +160,41 @@ class ConfigHelper {
     const current = this.getCurrentConfig();
 
     const deepseekConfig = {
-      name: 'DeepSeek (Self-hosted)',
-      description: 'Use your own DeepSeek server on DigitalOcean',
+      name: "DeepSeek (Self-hosted)",
+      description: "Use your own DeepSeek server",
       required: [
-        'DEEPSEEK_BASE_URL=http://your-droplet-ip',
-        'DEEPSEEK_TOKEN=your-token-here'
+        "API_FORMAT=deepseek",
+        "BASE_URL=http://your-droplet-ip",
+        "API_KEY=your-token-here",
       ],
-      optional: [
-        'API_FORMAT=deepseek',
-        'DEEPSEEK_MODEL=deepseek-r1:8b',
-        'DEEPSEEK_TIMEOUT=30000'
-      ]
+      optional: ["MODEL=deepseek-r1:8b", "TIMEOUT=30000"],
     };
 
     const openaiConfig = {
-      name: 'OpenAI API',
-      description: 'Use official OpenAI API service',
+      name: "OpenAI API",
+      description: "Use official OpenAI API service",
       required: [
-        'API_FORMAT=openai',
-        'OPENAI_BASE_URL=https://api.openai.com',
-        'OPENAI_API_KEY=your-openai-key-here'
+        "API_FORMAT=openai",
+        "BASE_URL=https://api.openai.com",
+        "API_KEY=your-openai-key-here",
       ],
-      optional: [
-        'OPENAI_MODEL=gpt-4',
-        'DEEPSEEK_TIMEOUT=30000'
-      ]
+      optional: ["MODEL=gpt-4", "TIMEOUT=30000"],
     };
 
     const customOpenaiConfig = {
-      name: 'Custom OpenAI-Compatible',
-      description: 'Use custom server with OpenAI-compatible API',
+      name: "Custom OpenAI-Compatible",
+      description: "Use custom server with OpenAI-compatible API",
       required: [
-        'API_FORMAT=openai',
-        'OPENAI_BASE_URL=http://your-custom-server',
-        'OPENAI_API_KEY=your-custom-key'
+        "API_FORMAT=openai",
+        "BASE_URL=http://your-custom-server",
+        "API_KEY=your-custom-key",
       ],
-      optional: [
-        'OPENAI_MODEL=your-model-name',
-        'DEEPSEEK_TIMEOUT=30000'
-      ]
+      optional: ["MODEL=your-model-name", "TIMEOUT=30000"],
     };
 
     return {
       current: current.apiFormat,
-      configurations: [deepseekConfig, openaiConfig, customOpenaiConfig]
+      configurations: [deepseekConfig, openaiConfig, customOpenaiConfig],
     };
   }
 
@@ -169,10 +204,10 @@ class ConfigHelper {
    */
   async readEnvFile() {
     try {
-      return await fs.readFile(this.envPath, 'utf8');
+      return await fs.readFile(this.envPath, "utf8");
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return '';
+      if (error.code === "ENOENT") {
+        return "";
       }
       throw error;
     }
@@ -194,17 +229,17 @@ class ConfigHelper {
    * @returns {Promise<void>}
    */
   async switchApiFormat(format, config = {}) {
-    if (!['openai', 'deepseek'].includes(format)) {
+    if (!["openai", "deepseek"].includes(format)) {
       throw new Error('Format must be either "openai" or "deepseek"');
     }
 
     const envContent = await this.readEnvFile();
-    const lines = envContent.split('\n');
+    const lines = envContent.split("\n");
     const newLines = [];
     const processedKeys = new Set();
 
     // Helper function to add or update line
-    const addOrUpdateLine = (key, value, comment = '') => {
+    const addOrUpdateLine = (key, value, comment = "") => {
       if (processedKeys.has(key)) return;
       processedKeys.add(key);
 
@@ -218,66 +253,67 @@ class ConfigHelper {
     for (let line of lines) {
       const trimmed = line.trim();
 
-      if (trimmed.startsWith('#') || trimmed === '') {
+      if (trimmed.startsWith("#") || trimmed === "") {
         newLines.push(line);
         continue;
       }
 
-      const [key] = trimmed.split('=');
+      const [key] = trimmed.split("=");
 
-      if (format === 'openai') {
-        if (key.startsWith('DEEPSEEK_') && !key.includes('TIMEOUT')) {
-          newLines.push(`# ${line}`); // Comment out DeepSeek configs
-        } else {
-          newLines.push(line);
-        }
+      // Keep only platform-agnostic variables
+      if (
+        [
+          "API_FORMAT",
+          "BASE_URL",
+          "API_KEY",
+          "MODEL",
+          "TIMEOUT",
+          "MCP_ENABLED",
+          "MCP_SERVERS",
+        ].includes(key)
+      ) {
+        newLines.push(line);
       } else {
-        if (key.startsWith('OPENAI_')) {
-          newLines.push(`# ${line}`); // Comment out OpenAI configs
-        } else {
-          newLines.push(line);
-        }
+        // Comment out any legacy variables
+        newLines.push(`# ${line}`);
       }
 
       processedKeys.add(key);
     }
 
     // Add format specification
-    if (!processedKeys.has('API_FORMAT')) {
-      newLines.push('');
-      addOrUpdateLine('API_FORMAT', format, `Using ${format.toUpperCase()} API format`);
+    if (!processedKeys.has("API_FORMAT")) {
+      newLines.push("");
+      addOrUpdateLine(
+        "API_FORMAT",
+        format,
+        `Using ${format.toUpperCase()} API format`,
+      );
     }
 
-    // Add required configuration based on format
-    if (format === 'openai') {
-      newLines.push('');
-      newLines.push('# OpenAI Configuration');
+    // Add platform-agnostic configuration
+    newLines.push("");
+    newLines.push("# Platform-Agnostic Configuration");
 
-      if (!processedKeys.has('OPENAI_BASE_URL')) {
-        addOrUpdateLine('OPENAI_BASE_URL', config.baseUrl || 'https://api.openai.com');
-      }
-      if (!processedKeys.has('OPENAI_API_KEY')) {
-        addOrUpdateLine('OPENAI_API_KEY', config.token || 'your-openai-key-here');
-      }
-      if (!processedKeys.has('OPENAI_MODEL')) {
-        addOrUpdateLine('OPENAI_MODEL', config.model || 'gpt-4');
-      }
-    } else {
-      newLines.push('');
-      newLines.push('# DeepSeek Configuration');
-
-      if (!processedKeys.has('DEEPSEEK_BASE_URL')) {
-        addOrUpdateLine('DEEPSEEK_BASE_URL', config.baseUrl || 'http://your-droplet-ip');
-      }
-      if (!processedKeys.has('DEEPSEEK_TOKEN')) {
-        addOrUpdateLine('DEEPSEEK_TOKEN', config.token || 'your-token-here');
-      }
-      if (!processedKeys.has('DEEPSEEK_MODEL')) {
-        addOrUpdateLine('DEEPSEEK_MODEL', config.model || 'deepseek-r1:8b');
-      }
+    if (!processedKeys.has("BASE_URL")) {
+      const defaultUrl =
+        format === "openai"
+          ? "https://api.openai.com"
+          : "http://your-server-url";
+      addOrUpdateLine("BASE_URL", config.baseUrl || defaultUrl);
+    }
+    if (!processedKeys.has("API_KEY")) {
+      addOrUpdateLine("API_KEY", config.token || "your-api-key-here");
+    }
+    if (!processedKeys.has("MODEL")) {
+      const defaultModel = format === "openai" ? "gpt-4" : "deepseek-r1:8b";
+      addOrUpdateLine("MODEL", config.model || defaultModel);
+    }
+    if (!processedKeys.has("TIMEOUT")) {
+      addOrUpdateLine("TIMEOUT", "30000");
     }
 
-    await this.writeEnvFile(newLines.join('\n'));
+    await this.writeEnvFile(newLines.join("\n"));
   }
 
   /**
@@ -290,75 +326,78 @@ class ConfigHelper {
 
     const { configType } = await prompt([
       {
-        type: 'list',
-        name: 'configType',
-        message: 'Choose your AI service configuration:',
+        type: "list",
+        name: "configType",
+        message: "Choose your AI service configuration:",
         choices: suggestions.configurations.map((config, index) => ({
           name: `${config.name} - ${config.description}`,
-          value: index
-        }))
-      }
+          value: index,
+        })),
+      },
     ]);
 
     const selectedConfig = suggestions.configurations[configType];
-    const format = configType === 0 ? 'deepseek' : 'openai';
+    const format = configType === 0 ? "deepseek" : "openai";
 
     console.log(`\n📝 Configuring ${selectedConfig.name}...`);
 
     const config = {};
 
-    if (format === 'deepseek') {
+    if (format === "deepseek") {
       const answers = await prompt([
         {
-          type: 'input',
-          name: 'baseUrl',
-          message: 'DeepSeek server URL:',
-          default: 'http://your-droplet-ip',
-          validate: (input) => input.trim() !== '' || 'URL is required'
+          type: "input",
+          name: "baseUrl",
+          message: "Server URL:",
+          default: "http://your-server-url",
+          validate: (input) => input.trim() !== "" || "URL is required",
         },
         {
-          type: 'input',
-          name: 'token',
-          message: 'DeepSeek authorization token:',
-          validate: (input) => input.trim() !== '' || 'Token is required'
+          type: "input",
+          name: "token",
+          message: "API key/token:",
+          validate: (input) => input.trim() !== "" || "API key is required",
         },
         {
-          type: 'input',
-          name: 'model',
-          message: 'Model name:',
-          default: 'deepseek-r1:8b'
-        }
+          type: "input",
+          name: "model",
+          message: "Model name:",
+          default: "deepseek-r1:8b",
+        },
       ]);
 
       Object.assign(config, answers);
     } else {
       const answers = await prompt([
         {
-          type: 'input',
-          name: 'baseUrl',
-          message: 'OpenAI API base URL:',
-          default: configType === 1 ? 'https://api.openai.com' : 'http://your-custom-server',
+          type: "input",
+          name: "baseUrl",
+          message: "API base URL:",
+          default:
+            configType === 1
+              ? "https://api.openai.com"
+              : "http://your-custom-server",
           validate: (input) => {
             try {
               new URL(input);
               return true;
             } catch {
-              return 'Please enter a valid URL';
+              return "Please enter a valid URL";
             }
-          }
+          },
         },
         {
-          type: 'input',
-          name: 'token',
-          message: 'API key:',
-          validate: (input) => input.trim() !== '' || 'API key is required'
+          type: "input",
+          name: "token",
+          message: "API key:",
+          validate: (input) => input.trim() !== "" || "API key is required",
         },
         {
-          type: 'input',
-          name: 'model',
-          message: 'Model name:',
-          default: configType === 1 ? 'gpt-4' : 'your-model-name'
-        }
+          type: "input",
+          name: "model",
+          message: "Model name:",
+          default: configType === 1 ? "gpt-4" : "your-model-name",
+        },
       ]);
 
       Object.assign(config, answers);
@@ -369,7 +408,7 @@ class ConfigHelper {
     return {
       format,
       config,
-      validation: this.validateConfig()
+      validation: this.validateConfig(),
     };
   }
 
@@ -380,50 +419,88 @@ class ConfigHelper {
   getExampleConfigurations() {
     return {
       deepseek: {
-        description: 'Self-hosted DeepSeek on DigitalOcean',
+        description: "Self-hosted DeepSeek server",
         env: `# DeepSeek Configuration
 API_FORMAT=deepseek
-DEEPSEEK_BASE_URL=http://your-droplet-ip
-DEEPSEEK_TOKEN=your-token-here
-DEEPSEEK_MODEL=deepseek-r1:8b
-DEEPSEEK_TIMEOUT=30000`,
+BASE_URL=http://your-server-url
+API_KEY=your-api-key-here
+MODEL=deepseek-r1:8b
+TIMEOUT=30000`,
         usage: `const client = new DeepSeekClient({
   apiFormat: 'deepseek',
-  baseUrl: 'http://your-droplet-ip',
-  token: 'your-token-here',
+  baseUrl: 'http://your-server-url',
+  token: 'your-api-key-here',
   model: 'deepseek-r1:8b'
-});`
+});`,
       },
       openai: {
-        description: 'Official OpenAI API',
+        description: "Official OpenAI API",
         env: `# OpenAI Configuration
 API_FORMAT=openai
-OPENAI_BASE_URL=https://api.openai.com
-OPENAI_API_KEY=your-openai-key-here
-OPENAI_MODEL=gpt-4
-DEEPSEEK_TIMEOUT=30000`,
+BASE_URL=https://api.openai.com
+API_KEY=your-openai-key-here
+MODEL=gpt-4
+TIMEOUT=30000`,
         usage: `const client = new DeepSeekClient({
   apiFormat: 'openai',
   baseUrl: 'https://api.openai.com',
   token: 'your-openai-key-here',
   model: 'gpt-4'
-});`
+});`,
       },
       customOpenai: {
-        description: 'Custom OpenAI-compatible API',
-        env: `# Custom OpenAI-Compatible Configuration
+        description: "Custom OpenAI-compatible API",
+        env: `# Custom API Configuration
 API_FORMAT=openai
-OPENAI_BASE_URL=http://your-custom-server
-OPENAI_API_KEY=your-custom-key
-OPENAI_MODEL=your-model-name
-DEEPSEEK_TIMEOUT=30000`,
+BASE_URL=http://your-custom-server
+API_KEY=your-custom-key
+MODEL=your-model-name
+TIMEOUT=30000`,
         usage: `const client = new DeepSeekClient({
   apiFormat: 'openai',
   baseUrl: 'http://your-custom-server',
   token: 'your-custom-key',
   model: 'your-model-name'
-});`
-      }
+});`,
+      },
+      mcpEnabled: {
+        description: "AI Client with MCP servers",
+        env: `# AI Configuration with MCP (Platform-Agnostic)
+API_FORMAT=deepseek
+BASE_URL=http://your-server-url
+API_KEY=your-api-key-here
+MODEL=deepseek-r1:8b
+
+# MCP Configuration
+MCP_ENABLED=true
+MCP_SERVERS='[
+  {
+    "name": "filesystem",
+    "command": "npx @modelcontextprotocol/server-filesystem /path/to/files",
+    "transport": "stdio"
+  },
+  {
+    "name": "web-search",
+    "serverUrl": "ws://localhost:8080/mcp",
+    "transport": "websocket"
+  }
+]'`,
+        usage: `const client = new DeepSeekClient({
+  apiFormat: 'deepseek',
+  baseUrl: 'http://your-server-url',
+  token: 'your-api-key-here',
+  mcpEnabled: true,
+  mcpServers: [
+    {
+      name: 'filesystem',
+      command: 'npx @modelcontextprotocol/server-filesystem /path/to/files',
+      transport: 'stdio'
+    }
+  ]
+});
+
+await client.initializeMcp();`,
+      },
     };
   }
 }

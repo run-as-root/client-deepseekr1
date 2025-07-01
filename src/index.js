@@ -1,10 +1,13 @@
-const DeepSeekClient = require('./DeepSeekClient');
+const AIClient = require("./AIClient");
 
-module.exports = DeepSeekClient;
+module.exports = AIClient;
 
 // For convenience, also export as default and named export
-module.exports.DeepSeekClient = DeepSeekClient;
-module.exports.default = DeepSeekClient;
+module.exports.AIClient = AIClient;
+module.exports.default = AIClient;
+
+// Backward compatibility
+module.exports.DeepSeekClient = AIClient;
 
 // Version info
-module.exports.VERSION = '1.0.0';
+module.exports.VERSION = "1.0.0";
