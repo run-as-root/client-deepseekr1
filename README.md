@@ -1,6 +1,6 @@
-# AI Client - OpenAI & DeepSeek Compatible with MCP Support
+# AI Client - OpenAI & DeepSeek Compatible
 
-A friendly and feature-rich client for communicating with AI models. Supports both OpenAI and DeepSeek API formats. This client provides both CLI and programmatic interfaces with support for reusable prompt templates and Model Context Protocol (MCP) server integration.
+A friendly and feature-rich client for communicating with AI models. Supports both OpenAI and DeepSeek API formats. This client provides both CLI and programmatic interfaces with support for reusable prompt templates.
 
 ## Features
 
@@ -46,12 +46,6 @@ A friendly and feature-rich client for communicating with AI models. Supports bo
    BASE_URL=http://your-custom-server
    API_KEY=your-custom-key
    MODEL=your-model-name
-   ```
-
-   **With MCP Integration:**
-   ```env
-   MCP_ENABLED=true
-   MCP_SERVERS='[{"name":"filesystem","command":"npx @modelcontextprotocol/server-filesystem /path","transport":"stdio"}]'
    ```
 
 ## Quick Start
@@ -127,21 +121,7 @@ node src/cli.js magento2 --quick
 node src/cli.js magento2 --file ticket.txt
 ```
 
-#### MCP (Model Context Protocol) Integration
-```bash
-# Connect to MCP servers
-node src/cli.js mcp --connect
 
-# List available MCP tools
-node src/cli.js mcp --tools
-
-# Call an MCP tool
-node src/cli.js mcp --call list_directory --args '{"path": "/tmp"}'
-
-# Interactive MCP management
-node src/cli.js interactive
-# Then choose "🌐 MCP tools"
-```
 
 ### Programmatic Usage
 
@@ -166,18 +146,6 @@ const openaiClient = new AIClient({
   model: 'gpt-4'
 });
 
-// MCP-enabled client
-const mcpClient = new AIClient({
-  mcpEnabled: true,
-  mcpServers: [
-    {
-      name: 'filesystem',
-      command: 'npx @modelcontextprotocol/server-filesystem /workspace',
-      transport: 'stdio'
-    }
-  ]
-});
-
 // Simple generation
 async function example() {
   try {
@@ -193,21 +161,6 @@ async function example() {
       context: 'machine learning project'
     });
     console.log(templateResponse.response);
-
-    // MCP integration
-    await mcpClient.initializeMcp();
-    const tools = mcpClient.getMcpTools();
-    console.log(`Available MCP tools: ${tools.map(t => t.name).join(', ')}`);
-
-    // Call MCP tool
-    const files = await mcpClient.callMcpTool('list_directory', { path: '/workspace' });
-    console.log('Files:', files);
-
-    // Enhanced generation with MCP
-    const enhancedResponse = await mcpClient.generateWithMcp(
-      'Can you list the files in my workspace and analyze the project structure?'
-    );
-    console.log(enhancedResponse.response);
 
     // Magento 2 ticket analysis
     const magentoAnalysis = await client.generateFromTemplate('magento2-ticket-analysis', {
@@ -261,20 +214,7 @@ Templates are stored in the `prompts/` directory as `.txt` files. They support v
 6. **magento2-quick-clarify.txt** - Quick Magento 2 ticket clarification
    - Variables: `ticket_content`, `magento_version`, `project_type`
 
-### MCP (Model Context Protocol) Integration
 
-Connect to external tools and services through MCP servers:
-
-**Available MCP Transports:**
-- **stdio** - Process-based communication
-- **websocket** - WebSocket connections  
-- **sse** - Server-Sent Events
-
-**Common MCP Servers:**
-- Filesystem access
-- Database queries
-- Web search
-- Calculator/math
 - Git operations
 - API integrations
 
@@ -384,53 +324,7 @@ Get current API format.
 
 **Returns:** string - Current API format ('openai' or 'deepseek')
 
-##### `initializeMcp()`
-Initialize MCP server connections.
 
-**Returns:** Promise<void>
-
-##### `getMcpTools()`
-Get available MCP tools.
-
-**Returns:** Array - Array of tool definitions
-
-##### `callMcpTool(toolName, arguments, serverName)`
-Call an MCP tool.
-
-**Parameters:**
-- `toolName` (string) - Name of the tool to call
-- `arguments` (object, optional) - Tool arguments
-- `serverName` (string, optional) - Specific server name
-
-**Returns:** Promise<object> - Tool result
-
-##### `getMcpResources()`
-Get available MCP resources.
-
-**Returns:** Array - Array of resource definitions
-
-##### `readMcpResource(uri, serverName)`
-Read an MCP resource.
-
-**Parameters:**
-- `uri` (string) - Resource URI
-- `serverName` (string, optional) - Specific server name
-
-**Returns:** Promise<object> - Resource content
-
-##### `generateWithMcp(prompt, options)`
-Generate response with MCP tool integration.
-
-**Parameters:**
-- `prompt` (string) - The prompt to send
-- `options` (object, optional) - Generation options
-
-**Returns:** Promise<object> - Enhanced response with tool capabilities
-
-##### `disconnectMcp()`
-Disconnect all MCP servers.
-
-**Returns:** Promise<void>
 
 ## CLI Commands
 
@@ -442,7 +336,6 @@ Disconnect all MCP servers.
 | `list` | `l` | List templates | `node src/cli.js list` |
 | `test` | - | Test connection | `node src/cli.js test` |
 | `config` | `c` | Manage API configuration | `node src/cli.js config` |
-| `mcp` | - | Manage MCP servers | `node src/cli.js mcp` |
 | `magento2` | `m2` | Analyze Magento 2 tickets | `node src/cli.js magento2` |
 
 ### CLI Options
@@ -453,9 +346,7 @@ Disconnect all MCP servers.
 - `--show` - Show current configuration (config command)
 - `--format <format>` - Switch API format (config command)
 - `--quick` - Quick analysis mode (magento2 command)
-- `--tools` - List MCP tools (mcp command)
-- `--call <tool>` - Call MCP tool (mcp command)
-- `--connect` - Connect to MCP servers (mcp command)
+
 
 ## Configuration
 
@@ -503,18 +394,6 @@ The client uses universal environment variables that work with any AI service:
      baseUrl: 'https://api.openai.com',
      token: 'your-openai-key',
      model: 'gpt-4'
-   });
-
-   // With MCP support
-   const mcpClient = new AIClient({
-     mcpEnabled: true,
-     mcpServers: [
-       {
-         name: 'filesystem',
-         command: 'npx @modelcontextprotocol/server-filesystem /workspace',
-         transport: 'stdio'
-       }
-     ]
    });
    ```
 
@@ -602,35 +481,7 @@ const response2 = await openaiClient.generate('Hello');
 const response3 = await customClient.generate('Hello');
 ```
 
-### MCP Integration Examples
-```javascript
-// Initialize MCP client
-const mcpClient = new AIClient({
-  mcpEnabled: true,
-  mcpServers: [
-    {
-      name: 'filesystem',
-      command: 'npx @modelcontextprotocol/server-filesystem /workspace',
-      transport: 'stdio'
-    }
-  ]
-});
 
-// Connect to MCP servers
-await mcpClient.initializeMcp();
-
-// List available tools
-const tools = mcpClient.getMcpTools();
-console.log('Available tools:', tools.map(t => t.name));
-
-// Call a tool
-const files = await mcpClient.callMcpTool('list_directory', { path: '/workspace' });
-
-// Enhanced generation with tool context
-const response = await mcpClient.generateWithMcp(
-  'Can you analyze the files in my workspace and suggest improvements?'
-);
-```
 
 ### Code Review
 ```javascript
@@ -719,11 +570,7 @@ console.log('\n');
    - Use `node src/cli.js config --format openai` to switch formats
    - Check that model names match the API format
 
-4. **MCP connection issues**
-   - Verify MCP servers are installed: `npm install -g @modelcontextprotocol/server-filesystem`
-   - Test MCP connection: `node src/cli.js mcp --connect`
-   - Check MCP server status: `node src/cli.js mcp --tools`
-   - Validate MCP_SERVERS JSON format in .env file
+
 
 3. **Connection timeout**
    - Check if your server is running
@@ -748,11 +595,6 @@ node src/cli.js config
 # Switch between API formats
 node src/cli.js config --format openai
 node src/cli.js config --format deepseek
-
-# MCP management
-node src/cli.js mcp --connect          # Connect to MCP servers
-node src/cli.js mcp --tools            # List available tools
-node src/cli.js mcp --call <tool>      # Call a specific tool
 ```
 
 ### Debug Mode
@@ -806,57 +648,9 @@ This client abstracts the differences between API formats:
 | Templates | ✅ | ✅ | ✅ Works with both |
 | Error handling | ✅ | ✅ | ✅ Normalized errors |
 | Model parameters | ✅ | ✅ | ✅ Format-specific options |
-| MCP integration | ✅ | ✅ | ✅ External tool access |
 
 ---
 
-## MCP Server Examples
 
-Install and use popular MCP servers:
-
-```bash
-# Install MCP servers
-npm install -g @modelcontextprotocol/server-filesystem
-npm install -g @modelcontextprotocol/server-sqlite
-
-# Configure in .env
-API_FORMAT=deepseek
-BASE_URL=http://your-server-url
-API_KEY=your-api-key
-MODEL=your-model-name
-
-MCP_ENABLED=true
-MCP_SERVERS='[
-  {
-    "name": "filesystem",
-    "command": "npx @modelcontextprotocol/server-filesystem /workspace",
-    "transport": "stdio"
-  },
-  {
-    "name": "database",
-    "command": "npx @modelcontextprotocol/server-sqlite /data/app.db",
-    "transport": "stdio"
-  }
-]'
-
-# Test MCP integration
-node src/cli.js mcp --connect
-node src/cli.js mcp --tools
-node src/cli.js mcp --call list_directory --args '{"path": "/workspace"}'
-```
-
-## Quick Start with MCP
-
-1. **Install MCP server**: `npm install -g @modelcontextprotocol/server-filesystem`
-2. **Configure environment** in `.env`:
-   ```env
-   BASE_URL=http://your-server-url
-   API_KEY=your-api-key
-   MODEL=your-model-name
-   MCP_ENABLED=true
-   ```
-3. **Connect**: `node src/cli.js mcp --connect`
-4. **Use tools**: `node src/cli.js mcp --tools`
-5. **Enhanced AI**: Use `generateWithMcp()` for tool-aware responses
 
 Made with ❤️ for the AI development community

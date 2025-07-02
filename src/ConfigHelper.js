@@ -8,27 +8,6 @@ class ConfigHelper {
   }
 
   /**
-   * Parse MCP servers from environment
-   * @private
-   */
-  _parseMcpServers() {
-    const serversEnv = process.env.MCP_SERVERS;
-    if (!serversEnv) {
-      return [];
-    }
-
-    try {
-      return JSON.parse(serversEnv);
-    } catch (error) {
-      console.error(
-        "Error parsing MCP_SERVERS environment variable:",
-        error.message,
-      );
-      return [];
-    }
-  }
-
-  /**
    * Detect current API format from environment
    * @returns {string} - 'openai' or 'deepseek'
    */
@@ -77,10 +56,6 @@ class ConfigHelper {
       timeout,
     };
 
-    // Add MCP configuration
-    baseConfig.mcpEnabled = process.env.MCP_ENABLED === "true";
-    baseConfig.mcpServers = this._parseMcpServers();
-
     return baseConfig;
   }
 
@@ -121,26 +96,6 @@ class ConfigHelper {
         new URL(config.baseUrl);
       } catch (e) {
         errors.push(`Invalid base URL format: ${config.baseUrl}`);
-      }
-    }
-
-    // Validate MCP configuration
-    if (config.mcpEnabled) {
-      if (!config.mcpServers || config.mcpServers.length === 0) {
-        warnings.push(
-          "MCP is enabled but no servers configured. Set MCP_SERVERS environment variable.",
-        );
-      } else {
-        for (const server of config.mcpServers) {
-          if (!server.name) {
-            warnings.push("MCP server missing name property.");
-          }
-          if (!server.serverUrl && !server.command) {
-            errors.push(
-              `MCP server "${server.name || "unnamed"}" missing serverUrl or command.`,
-            );
-          }
-        }
       }
     }
 
@@ -262,15 +217,7 @@ class ConfigHelper {
 
       // Keep only platform-agnostic variables
       if (
-        [
-          "API_FORMAT",
-          "BASE_URL",
-          "API_KEY",
-          "MODEL",
-          "TIMEOUT",
-          "MCP_ENABLED",
-          "MCP_SERVERS",
-        ].includes(key)
+        ["API_FORMAT", "BASE_URL", "API_KEY", "MODEL", "TIMEOUT"].includes(key)
       ) {
         newLines.push(line);
       } else {
@@ -462,44 +409,6 @@ TIMEOUT=30000`,
   token: 'your-custom-key',
   model: 'your-model-name'
 });`,
-      },
-      mcpEnabled: {
-        description: "AI Client with MCP servers",
-        env: `# AI Configuration with MCP (Platform-Agnostic)
-API_FORMAT=deepseek
-BASE_URL=http://your-server-url
-API_KEY=your-api-key-here
-MODEL=deepseek-r1:8b
-
-# MCP Configuration
-MCP_ENABLED=true
-MCP_SERVERS='[
-  {
-    "name": "filesystem",
-    "command": "npx @modelcontextprotocol/server-filesystem /path/to/files",
-    "transport": "stdio"
-  },
-  {
-    "name": "web-search",
-    "serverUrl": "ws://localhost:8080/mcp",
-    "transport": "websocket"
-  }
-]'`,
-        usage: `const client = new DeepSeekClient({
-  apiFormat: 'deepseek',
-  baseUrl: 'http://your-server-url',
-  token: 'your-api-key-here',
-  mcpEnabled: true,
-  mcpServers: [
-    {
-      name: 'filesystem',
-      command: 'npx @modelcontextprotocol/server-filesystem /path/to/files',
-      transport: 'stdio'
-    }
-  ]
-});
-
-await client.initializeMcp();`,
       },
     };
   }

@@ -1,7 +1,7 @@
 {
   "name": "universal-ai-client",
   "version": "2.0.0",
-  "description": "A universal AI client supporting multiple API formats (OpenAI, DeepSeek) with platform-agnostic configuration and MCP integration",
+  "description": "A universal AI client supporting multiple API formats (OpenAI, DeepSeek) with platform-agnostic configuration",
   "main": "src/index.js",
   "bin": {
     "ai-client": "./src/cli.js"
@@ -12,11 +12,7 @@
     "example": "node examples/basic-usage.js",
     "example:api-formats": "node examples/api-formats-example.js",
     "example:magento2": "node examples/magento2-ticket-example.js",
-    "example:mcp": "node examples/mcp-integration-example.js",
     "config": "node src/cli.js config",
-    "mcp": "node src/cli.js mcp",
-    "mcp:connect": "node src/cli.js mcp --connect",
-    "mcp:tools": "node src/cli.js mcp --tools",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -29,7 +25,6 @@
     "gpt",
     "chat",
     "api",
-    "mcp",
     "platform-agnostic"
   ],
   "author": "Your Name",
@@ -40,9 +35,7 @@
     "inquirer": "^9.2.0",
     "chalk": "^4.1.2",
     "ora": "^5.4.1",
-    "dotenv": "^16.3.0",
-    "ws": "^8.14.0",
-    "eventsource": "^2.0.2"
+    "dotenv": "^16.3.0"
   },
   "engines": {
     "node": ">=14.0.0"
