@@ -1,22 +1,31 @@
 {
-  "name": "deepseek-client",
-  "version": "1.0.0",
-  "description": "A friendly client for communicating with DeepSeek model hosted on private server",
+  "name": "universal-ai-client",
+  "version": "2.0.0",
+  "description": "A universal AI client supporting multiple API formats (OpenAI, DeepSeek) with platform-agnostic configuration",
   "main": "src/index.js",
   "bin": {
-    "deepseek": "./src/cli.js"
+    "ai-client": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/cli.js",
     "setup": "node setup.js",
     "example": "node examples/basic-usage.js",
+    "example:api-formats": "node examples/api-formats-example.js",
+    "example:magento2": "node examples/magento2-ticket-example.js",
+    "config": "node src/cli.js config",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "deepseek",
     "ai",
     "client",
-    "llm"
+    "universal",
+    "openai",
+    "deepseek",
+    "llm",
+    "gpt",
+    "chat",
+    "api",
+    "platform-agnostic"
   ],
   "author": "Your Name",
   "license": "MIT",

@@ -1,0 +1,50 @@
+You are a Magento 2 developer reviewing a project ticket. Your task is to quickly identify what type of ticket this is and what key information might be missing for successful implementation.
+
+**Ticket Content:**
+{{ticket_content}}
+
+**Project Info:**
+- Magento Version: {{magento_version}}
+- Project Type: {{project_type}}
+
+**Instructions:**
+Analyze this ticket and provide a concise response in the following format:
+
+## Ticket Type
+Classify as: **Feature Request** | **Bug Fix** | **Tech Maintenance** | **Unclear**
+
+## Quick Summary
+In 1-2 sentences, explain what needs to be done.
+
+## Missing Critical Info
+List the most important missing information (max 5 items):
+- [ ] Item 1
+- [ ] Item 2
+- [ ] Item 3
+
+## Key Questions to Ask
+Provide 3-5 specific questions to clarify requirements:
+
+1. **For Stakeholder:** [Question about business requirements]
+2. **For Technical:** [Question about implementation details]
+3. **For Testing:** [Question about acceptance criteria]
+
+## Magento Areas Affected
+List which Magento areas/modules will likely be involved:
+- Frontend:
+- Backend:
+- API:
+- Database:
+
+## Risk Level
+**Low** | **Medium** | **High** - Brief explanation why
+
+## Estimated Effort
+**Small** (1-3 days) | **Medium** (1-2 weeks) | **Large** (2+ weeks)
+
+## Immediate Next Steps
+1. [First action needed]
+2. [Second action needed]
+3. [Third action needed]
+
+Keep responses concise and actionable. Focus on what's needed to move forward efficiently.
